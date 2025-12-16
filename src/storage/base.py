@@ -1,0 +1,3 @@
+
+
+class BaseStorage(Protocol):
