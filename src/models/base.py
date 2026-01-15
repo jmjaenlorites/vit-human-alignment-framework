@@ -1,4 +1,4 @@
-from typing import Protocol, Any, Optional, TypedDict
+from typing import Protocol, Any, Optional
 
 import torch
 import jax.numpy as jnp
@@ -7,9 +7,15 @@ from ..utils.common_enums import BackendEnum
 from ..utils.common_types import ArrayLike
 from ..utils.common_utils import get_backend_device
 
-class ForwardOutputs(TypedDict):
-    features: Optional[ArrayLike]
-    saliency: Optional[ArrayLike]
+# TODO: Definir esquema/validación para ForwardOutputs
+# Considerar usar TypedDict extensible o Pydantic para validar estructuras
+# Estructuras comunes:
+#   - Saliency: {"features": [...], "saliency": [...]}
+#   - TID: {"features_ref": [...], "features_dist": [...]}
+#   - Levels: {"features_img1": [...], "features_img2": [...], "features_img3": [...]}
+#   - Nights: {"features_ref": [...], "features_left": [...], "features_right": [...]}
+ForwardOutputs = dict[str, Any]
+
 
 class BaseModelAdapter(Protocol):
     name: str
@@ -30,14 +36,24 @@ class BaseModelAdapter(Protocol):
     def preprocess(self, images: ArrayLike) -> ArrayLike:
         """Normaliza y resiza al `image_size` esperado."""
 
-    def forward(self, batch: Any, layers: Optional[list[int]] = None, return_features: bool = True, return_saliency: bool = False) -> ForwardOutputs:
+    def forward(
+        self,
+        batch: Any,
+        layers: Optional[list[int]] = None,
+        return_features: bool = True,
+        return_saliency: bool = False,
+    ) -> ForwardOutputs:
         """Ejecuta el modelo y retorna dict estandarizado."""
-        assert return_features or return_saliency, "At least one of return_features or return_saliency must be True"
+        assert return_features or return_saliency, (
+            "At least one of return_features or return_saliency must be True"
+        )
         features = self.forward_features(batch, layers) if return_features else None
         saliency = self.forward_saliency(batch, layers) if return_saliency else None
-        return ForwardOutputs(features=features, saliency=saliency)
+        return {"features": features, "saliency": saliency}
 
-    def forward_features(self, batch: Any, layers: Optional[list[int]] = None) -> ArrayLike:
+    def forward_features(
+        self, batch: Any, layers: Optional[list[int]] = None
+    ) -> ArrayLike:
         """Ejecuta el modelo y retorna las features."""
         match self.backend:
             case BackendEnum.TORCH:
@@ -47,7 +63,9 @@ class BaseModelAdapter(Protocol):
             case _:
                 raise ValueError(f"Backend {self.backend} not supported")
 
-    def forward_saliency(self, batch: Any, layers: Optional[list[int]] = None) -> ArrayLike:
+    def forward_saliency(
+        self, batch: Any, layers: Optional[list[int]] = None
+    ) -> ArrayLike:
         """Ejecuta el modelo y retorna el saliency."""
         match self.backend:
             case BackendEnum.TORCH:
@@ -57,19 +75,27 @@ class BaseModelAdapter(Protocol):
             case _:
                 raise ValueError(f"Backend {self.backend} not supported")
 
-    def forward_features_torch(self, batch: Any, layers: Optional[list[int]] = None) -> torch.Tensor:
+    def forward_features_torch(
+        self, batch: Any, layers: Optional[list[int]] = None
+    ) -> torch.Tensor:
         """Ejecuta el modelo y retorna las features."""
         raise NotImplementedError
 
-    def forward_saliency_torch(self, batch: Any, layers: Optional[list[int]] = None) -> torch.Tensor:
+    def forward_saliency_torch(
+        self, batch: Any, layers: Optional[list[int]] = None
+    ) -> torch.Tensor:
         """Ejecuta el modelo y retorna el saliency."""
         raise NotImplementedError
 
-    def forward_features_jax(self, batch: Any, layers: Optional[list[int]] = None) -> jnp.ndarray:
+    def forward_features_jax(
+        self, batch: Any, layers: Optional[list[int]] = None
+    ) -> jnp.ndarray:
         """Ejecuta el modelo y retorna las features."""
         raise NotImplementedError
 
-    def forward_saliency_jax(self, batch: Any, layers: Optional[list[int]] = None) -> jnp.ndarray:
+    def forward_saliency_jax(
+        self, batch: Any, layers: Optional[list[int]] = None
+    ) -> jnp.ndarray:
         """Ejecuta el modelo y retorna el saliency."""
         raise NotImplementedError
 
