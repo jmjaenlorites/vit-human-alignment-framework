@@ -58,17 +58,22 @@ class PearsonCorrelationCoefficient(BaseSaliencyMetric):
         ground_truth_saliency_map: torch.Tensor,
         ground_truth_fixation_map: torch.Tensor,
     ) -> torch.Tensor:
+        # Squeeze any extra dimensions to ensure 2D maps
+        if pred_map.dim() > 2:
+            pred_map = pred_map.squeeze()
+        if ground_truth_saliency_map.dim() > 2:
+            ground_truth_saliency_map = ground_truth_saliency_map.squeeze()
+        
         x = pred_map.flatten().to(torch.float)
         y = ground_truth_saliency_map.flatten().to(
             device=pred_map.device,
             dtype=torch.float,
         )
+        
         x_centered = x - x.mean()
         y_centered = y - y.mean()
         denom = torch.sqrt((x_centered**2).sum()) * torch.sqrt((y_centered**2).sum())
-        print(
-            f"Pearson correlation coefficient denominator: {denom} and eps: {self._EPS}"
-        )
+
         if denom <= self._EPS:
             return torch.tensor(float("nan"), device=pred_map.device, dtype=torch.float)
         result = (x_centered * y_centered).sum() / denom
@@ -103,10 +108,12 @@ class SaliencyMetricsCalculator(BaseMetricCalculator):
 
     def process_batch(self, batch: Any, model: Any) -> dict[str, Any]:
         """
-        Para saliency, hacemos un solo forward del batch completo.
+        Para saliency, hacemos forward solo del stimulus (batch[0]).
+        El batch completo (stimulus, saliency_gt, fixation_gt) se usa luego en calculate().
         """
+        stimulus = batch[0]
         batch_results = model.forward(
-            batch,
+            stimulus,
             return_features=self._return_features,
             return_saliency=self._return_saliency,
         )

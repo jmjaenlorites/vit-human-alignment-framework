@@ -1,5 +1,6 @@
 from typing import Protocol, Literal, Callable, Optional
 from typing import Any
+import json
 
 import torch
 import jax.numpy as jnp
@@ -56,23 +57,30 @@ class BaseSaliencyMetric(BaseMetric):
 
     def __init__(self, backend: BackendEnum):
         super().__init__(backend)
-        self.accumulated_values: list[float] = []
+        # Lista de listas: accumulated_values[layer_idx] = [valores por imagen]
+        self.accumulated_values: list[list[float]] = []
 
     def calculate(self, batch: Any, batch_results: ForwardOutputs) -> None:
         """
-        Acumula valores de métricas de saliency por batch.
+        Acumula valores de métricas de saliency por batch, para cada capa.
 
         Args:
             batch: Tupla (stimulus, saliency_gt, fixation_gt)
             batch_results: Dict con {"features": [...], "saliency": [...]}
+                where saliency is a list of attention rollout maps per layer
         """
-        saliency_map_size = batch_results["saliency"][0].shape
-
-        # TODO: Implementar el rollout attention en lugar de este producto de matrices
-        predicted_saliency_maps = (
-            batch_results["saliency"][..., None].transpose(-2, -1)
-            @ batch_results["saliency"][..., None]
-        )
+        if batch_results["saliency"] is None or len(batch_results["saliency"]) == 0:
+            raise ValueError("No saliency maps found in batch_results")
+        
+        saliency_maps_per_layer = batch_results["saliency"]
+        num_layers = len(saliency_maps_per_layer)
+        
+        # Inicializar listas por capa si es la primera vez
+        if len(self.accumulated_values) == 0:
+            self.accumulated_values = [[] for _ in range(num_layers)]
+        
+        # Usar el tamaño del primer mapa para redimensionar ground truth
+        saliency_map_size = saliency_maps_per_layer[0].shape[-2:]  # (H, W)
 
         ground_truth_saliency_maps = torchvision.transforms.Resize(saliency_map_size)(
             batch[1]
@@ -81,49 +89,63 @@ class BaseSaliencyMetric(BaseMetric):
             batch[2]
         )
 
-        match self._backend:
-            case BackendEnum.TORCH:
-                for (
-                    predicted_saliency_map,
-                    ground_truth_saliency_map,
-                    ground_truth_fixation_map,
-                ) in zip(
-                    predicted_saliency_maps,
-                    ground_truth_saliency_maps,
-                    ground_truth_fixation_maps,
-                ):
-                    device = predicted_saliency_map.device
-                    ground_truth_saliency_map = ground_truth_saliency_map.to(device)
-                    ground_truth_fixation_map = ground_truth_fixation_map.to(device)
-                    value = self._calculate_torch(
+        # Procesar cada capa
+        for layer_idx in range(num_layers):
+            predicted_saliency_maps = saliency_maps_per_layer[layer_idx]
+
+            match self._backend:
+                case BackendEnum.TORCH:
+                    for (
                         predicted_saliency_map,
                         ground_truth_saliency_map,
                         ground_truth_fixation_map,
-                    )
-                    self.accumulated_values.append(value.item())
-            case BackendEnum.JAX:
-                for (
-                    predicted_saliency_map,
-                    ground_truth_saliency_map,
-                    ground_truth_fixation_map,
-                ) in zip(
-                    predicted_saliency_maps,
-                    ground_truth_saliency_maps,
-                    ground_truth_fixation_maps,
-                ):
-                    value = self._calculate_jax(
+                    ) in zip(
+                        predicted_saliency_maps,
+                        ground_truth_saliency_maps,
+                        ground_truth_fixation_maps,
+                    ):
+                        device = predicted_saliency_map.device
+                        ground_truth_saliency_map = ground_truth_saliency_map.to(device)
+                        ground_truth_fixation_map = ground_truth_fixation_map.to(device)
+                        
+                        value = self._calculate_torch(
+                            predicted_saliency_map,
+                            ground_truth_saliency_map,
+                            ground_truth_fixation_map,
+                        )
+                        
+                        self.accumulated_values[layer_idx].append(value.item())
+                case BackendEnum.JAX:
+                    for (
                         predicted_saliency_map,
                         ground_truth_saliency_map,
                         ground_truth_fixation_map,
-                    )
-                    self.accumulated_values.append(float(value))
+                    ) in zip(
+                        predicted_saliency_maps,
+                        ground_truth_saliency_maps,
+                        ground_truth_fixation_maps,
+                    ):
+                        value = self._calculate_jax(
+                            predicted_saliency_map,
+                            ground_truth_saliency_map,
+                            ground_truth_fixation_map,
+                        )
+                        self.accumulated_values[layer_idx].append(float(value))
 
     def finalize(self) -> dict[str, Any]:
-        """Calcula la media de los valores acumulados."""
-        if len(self.accumulated_values) > 0:
-            return {self.name: float(np.mean(self.accumulated_values))}
-        else:
-            return {self.name: float("nan")}
+        """
+        Calcula la media de los valores acumulados por capa.
+        Retorna un dict con el array de métricas por capa serializado como JSON.
+        """
+        metrics_per_layer = []
+        for layer_idx, values in enumerate(self.accumulated_values):
+            if len(values) > 0:
+                metrics_per_layer.append(float(np.mean(values)))
+            else:
+                metrics_per_layer.append(float("nan"))
+        
+        # Serializar como JSON string (mismo formato que TID)
+        return {self.name: json.dumps(metrics_per_layer)}
 
     def reset(self) -> None:
         """Reinicia los valores acumulados."""

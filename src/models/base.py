@@ -71,7 +71,13 @@ class BaseModelAdapter(Protocol):
     def forward_saliency(
         self, batch: Any, layers: Optional[list[int]] = None
     ) -> ArrayLike:
-        """Ejecuta el modelo y retorna el saliency."""
+        """Ejecuta el modelo y retorna el saliency.
+        
+        Returns:
+            Para modelos con attention rollout (como ViT): lista de mapas de saliency,
+            uno por cada capa solicitada. Cada mapa tiene shape [B, H, W].
+            Para otros modelos: puede ser un único tensor o estructura apropiada.
+        """
         match self.backend:
             case BackendEnum.TORCH:
                 return self.forward_saliency_torch(batch, layers)
@@ -88,8 +94,12 @@ class BaseModelAdapter(Protocol):
 
     def forward_saliency_torch(
         self, batch: Any, layers: Optional[list[int]] = None
-    ) -> torch.Tensor:
-        """Ejecuta el modelo y retorna el saliency."""
+    ) -> torch.Tensor | list[torch.Tensor]:
+        """Ejecuta el modelo y retorna el saliency.
+        
+        Returns:
+            Puede ser un único tensor o una lista de tensors (para rollout por capa).
+        """
         raise NotImplementedError
 
     def forward_features_jax(
