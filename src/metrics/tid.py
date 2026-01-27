@@ -1,13 +1,14 @@
-import logging
-import torch
 import json
-from typing import Any, Callable, Optional, Literal
+import logging
+from typing import Any, Callable, Literal, Optional
+
+import torch
 from scipy.stats import spearmanr
 
-from .base import BaseMetric, BaseMetricCalculator
 from ..dataset_loaders.tid import TID2013TorchDatasetLoader
 from ..models.base import BaseModelAdapter, ForwardOutputs
 from ..utils.common_enums import BackendEnum
+from .base import BaseMetric, BaseMetricCalculator
 
 logger = logging.getLogger(__name__)
 

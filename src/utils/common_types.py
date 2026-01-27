@@ -1,8 +1,9 @@
-from typing import TYPE_CHECKING, Any
 from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any
+
+import jax.numpy as jnp
 import numpy as np
 import torch
-import jax.numpy as jnp
 
 if TYPE_CHECKING:
     from ..metrics.base import BaseMetric

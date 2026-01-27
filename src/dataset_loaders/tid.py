@@ -1,9 +1,11 @@
 import os
+from typing import Any, Callable, Optional
+
 import pandas as pd
-from torch.utils.data import Dataset
-from typing import Optional, Callable, Any
-from PIL import Image
 import torchvision.transforms.functional as F
+from PIL import Image
+from torch.utils.data import Dataset
+
 from .base import BaseDatasetLoader, BaseTorchDatasetLoader
 
 

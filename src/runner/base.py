@@ -1,17 +1,18 @@
-from typing import Optional, List, Any
 import logging
+from typing import Any, List, Optional
+
 import pandas as pd
-from ..metrics.saliency import SaliencyMetricsCalculator
-from ..metrics.tid import TIDMetricsCalculator
+
+from ..metrics import load_metric
+from ..metrics.base import BaseMetric
 from ..metrics.levels import LevelsMetricsCalculator
 from ..metrics.nights import NightsMetricsCalculator
-
-from ..utils.common_types import ExperimentSpec
-from ..metrics.base import BaseMetric
-from ..metrics import load_metric
-from ..utils.common_enums import BackendEnum
-from ..utils.common_utils import METRIC_PREFIX
+from ..metrics.saliency import SaliencyMetricsCalculator
+from ..metrics.tid import TIDMetricsCalculator
 from ..models import load_model
+from ..utils.common_enums import BackendEnum
+from ..utils.common_types import ExperimentSpec
+from ..utils.common_utils import METRIC_PREFIX
 
 logger = logging.getLogger(__name__)
 

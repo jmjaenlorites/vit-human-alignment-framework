@@ -1,12 +1,13 @@
-import torch
 import json
-from typing import Any, Callable, Optional, Literal
 import os
+from typing import Any, Callable, Literal, Optional
 
-from .base import BaseMetric, BaseMetricCalculator
+import torch
+
 from ..dataset_loaders.levels import LevelsTorchDatasetLoader
 from ..models.base import BaseModelAdapter, ForwardOutputs
 from ..utils.common_enums import BackendEnum
+from .base import BaseMetric, BaseMetricCalculator
 
 
 class BaseLevelsMetric(BaseMetric):

@@ -1,11 +1,13 @@
-import torch
 from typing import Any, Callable, Optional
-from .base import BaseMetricCalculator, BaseSaliencyMetric
+
+import torch
+
 from ..dataset_loaders.saliency import (
     BaseSaliencyDatasetLoader,
     SaliencyMIT1003TorchDatasetLoader,
 )
 from ..utils.common_enums import BackendEnum
+from .base import BaseMetricCalculator, BaseSaliencyMetric
 
 
 class AUC_Judd(BaseSaliencyMetric):
@@ -63,13 +65,13 @@ class PearsonCorrelationCoefficient(BaseSaliencyMetric):
             pred_map = pred_map.squeeze()
         if ground_truth_saliency_map.dim() > 2:
             ground_truth_saliency_map = ground_truth_saliency_map.squeeze()
-        
+
         x = pred_map.flatten().to(torch.float)
         y = ground_truth_saliency_map.flatten().to(
             device=pred_map.device,
             dtype=torch.float,
         )
-        
+
         x_centered = x - x.mean()
         y_centered = y - y.mean()
         denom = torch.sqrt((x_centered**2).sum()) * torch.sqrt((y_centered**2).sum())

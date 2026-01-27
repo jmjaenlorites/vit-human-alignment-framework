@@ -1,7 +1,7 @@
-from typing import Protocol, Any, Optional
+from typing import Any, Optional, Protocol
 
-import torch
 import jax.numpy as jnp
+import torch
 
 from ..utils.common_enums import BackendEnum
 from ..utils.common_types import ArrayLike
@@ -72,7 +72,7 @@ class BaseModelAdapter(Protocol):
         self, batch: Any, layers: Optional[list[int]] = None
     ) -> ArrayLike:
         """Ejecuta el modelo y retorna el saliency.
-        
+
         Returns:
             Para modelos con attention rollout (como ViT): lista de mapas de saliency,
             uno por cada capa solicitada. Cada mapa tiene shape [B, H, W].
@@ -96,7 +96,7 @@ class BaseModelAdapter(Protocol):
         self, batch: Any, layers: Optional[list[int]] = None
     ) -> torch.Tensor | list[torch.Tensor]:
         """Ejecuta el modelo y retorna el saliency.
-        
+
         Returns:
             Puede ser un único tensor o una lista de tensors (para rollout por capa).
         """

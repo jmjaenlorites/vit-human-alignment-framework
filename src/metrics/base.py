@@ -1,15 +1,14 @@
-from typing import Protocol, Literal, Callable, Optional
-from typing import Any
 import json
+from typing import Any, Callable, Literal, Optional, Protocol
 
-import torch
 import jax.numpy as jnp
-import torchvision
 import numpy as np
+import torch
+import torchvision
 
+from ..dataset_loaders.base import BaseDatasetLoader
 from ..models.base import BaseModelAdapter, ForwardOutputs
 from ..utils.common_enums import BackendEnum
-from ..dataset_loaders.base import BaseDatasetLoader
 
 # TODO: Definir esquema/validación para los outputs de process_batch()
 # Los calculators devuelven dicts con diferentes estructuras según el tipo de métrica:
@@ -71,14 +70,14 @@ class BaseSaliencyMetric(BaseMetric):
         """
         if batch_results["saliency"] is None or len(batch_results["saliency"]) == 0:
             raise ValueError("No saliency maps found in batch_results")
-        
+
         saliency_maps_per_layer = batch_results["saliency"]
         num_layers = len(saliency_maps_per_layer)
-        
+
         # Inicializar listas por capa si es la primera vez
         if len(self.accumulated_values) == 0:
             self.accumulated_values = [[] for _ in range(num_layers)]
-        
+
         # Usar el tamaño del primer mapa para redimensionar ground truth
         saliency_map_size = saliency_maps_per_layer[0].shape[-2:]  # (H, W)
 
@@ -107,13 +106,13 @@ class BaseSaliencyMetric(BaseMetric):
                         device = predicted_saliency_map.device
                         ground_truth_saliency_map = ground_truth_saliency_map.to(device)
                         ground_truth_fixation_map = ground_truth_fixation_map.to(device)
-                        
+
                         value = self._calculate_torch(
                             predicted_saliency_map,
                             ground_truth_saliency_map,
                             ground_truth_fixation_map,
                         )
-                        
+
                         self.accumulated_values[layer_idx].append(value.item())
                 case BackendEnum.JAX:
                     for (
@@ -143,7 +142,7 @@ class BaseSaliencyMetric(BaseMetric):
                 metrics_per_layer.append(float(np.mean(values)))
             else:
                 metrics_per_layer.append(float("nan"))
-        
+
         # Serializar como JSON string (mismo formato que TID)
         return {self.name: json.dumps(metrics_per_layer)}
 
