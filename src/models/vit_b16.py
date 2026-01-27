@@ -8,14 +8,21 @@ from ..models.base import BaseModelAdapter
 from ..utils.common_types import ArrayLike
 
 
-
-
-class ViT_B_16(BaseModelAdapter):
-    MODEL_NAME = "vit_base_patch16_clip_224.laion2b"
+class TimmViTAdapter(BaseModelAdapter):
+    """Clase base para adaptadores de Vision Transformers usando timm.
+    
+    Usa get_intermediate_layers de timm para extraer features intermedias
+    de forma consistente y mantenible.
+    
+    Subclases solo necesitan definir:
+        - MODEL_NAME: nombre del modelo en timm
+        - DISPLAY_NAME: nombre para mostrar/logs
+    """
+    MODEL_NAME: str  # Debe ser definido por subclases
+    DISPLAY_NAME: str  # Debe ser definido por subclases
 
     def __init__(self, config: dict[str, Any] = {}):
-        super().__init__("ViT-B-16", BackendEnum.TORCH, config)
-
+        super().__init__(self.DISPLAY_NAME, BackendEnum.TORCH, config)
         self.transform = timm.data.create_transform(
             **timm.data.resolve_data_config({}, model=self.MODEL_NAME),
             is_training=False,
@@ -23,61 +30,77 @@ class ViT_B_16(BaseModelAdapter):
 
     def _load_model(self, config: dict[str, Any]) -> Any:
         model = timm.create_model(self.MODEL_NAME, pretrained=True)
+        model.eval()
         return model.to(self.device)
-
-    def _forward_hidden_states_torch(self, batch: Any) -> list[torch.Tensor]:
-        with torch.no_grad():
-            x = batch.to(self.device)
-            model = self.model
-
-            if hasattr(model, "patch_embed"):
-                x = model.patch_embed(x)
-            if hasattr(model, "_pos_embed"):
-                x = model._pos_embed(x)
-            else:
-                if hasattr(model, "cls_token"):
-                    cls_token = model.cls_token.expand(x.shape[0], -1, -1)
-                    x = torch.cat((cls_token, x), dim=1)
-                if hasattr(model, "pos_embed"):
-                    x = x + model.pos_embed
-                if hasattr(model, "pos_drop"):
-                    x = model.pos_drop(x)
-
-            if hasattr(model, "norm_pre"):
-                x = model.norm_pre(x)
-
-            hidden_states = [x]
-            for block in model.blocks:
-                x = block(x)
-                hidden_states.append(x)
-
-            if hasattr(model, "norm"):
-                x = model.norm(x)
-                hidden_states[-1] = x
-
-            return hidden_states
 
     def forward_features_torch(
         self, batch: Any, layers: Optional[list[int]] = None
     ) -> ArrayLike:
         """Ejecuta el modelo y retorna las features por capa.
 
-        Por defecto devuelve todas las capas (embeddings + bloques).
+        Usa get_intermediate_layers con reshape=False y return_prefix_tokens=True
+        para obtener formato [B, num_tokens, hidden_dim] (CLS + patches).
+        
+        Args:
+            batch: Tensor de entrada [B, C, H, W]
+            layers: Lista de índices de capas a extraer. None = todas.
+            
+        Returns:
+            Lista de tensores [B, num_tokens, hidden_dim] por cada capa.
         """
-        hidden_states = self._forward_hidden_states_torch(batch)
-        if layers is None:
+        with torch.no_grad():
+            x = batch.to(self.device)
+            
+            # Determinar qué capas extraer (por defecto todas)
+            num_blocks = len(self.model.blocks)
+            indices = list(range(num_blocks)) if layers is None else layers
+            
+            # Usar API nativa de timm
+            intermediates = self.model.get_intermediate_layers(
+                x,
+                indices,
+                reshape=False,              # Mantener formato [B, N, C]
+                return_prefix_tokens=True,  # Devolver CLS token separado
+                norm=False,                 # Sin normalización en capas intermedias
+            )
+            
+            # Concatenar [CLS, patches] -> [B, num_tokens, hidden_dim]
+            hidden_states = [
+                torch.cat([prefix, spatial], dim=1)
+                for spatial, prefix in intermediates
+            ]
+            
             return hidden_states
-        if not layers:
-            return []
-        max_index = len(hidden_states) - 1
-        if any(layer < 0 or layer > max_index for layer in layers):
-            raise ValueError(f"layers must be within [0, {max_index}], got {layers}")
-        return [hidden_states[layer] for layer in layers]
 
     def forward_saliency_torch(
         self, batch: Any, layers: Optional[list[int]] = None
     ) -> torch.Tensor:
-        """Ejecuta el modelo y retorna el saliency."""
+        """Ejecuta el modelo y retorna la salida final."""
         with torch.no_grad():
-            results = self.model(batch[0].to(self.device))
-        return results
+            return self.model(batch.to(self.device))
+
+
+# =============================================================================
+# Modelos específicos - Solo definen MODEL_NAME y DISPLAY_NAME
+# =============================================================================
+
+class ViT_B_16(TimmViTAdapter):
+    """ViT-Base/16 entrenado con CLIP en LAION-2B."""
+    MODEL_NAME = "vit_base_patch16_clip_224.laion2b"
+    DISPLAY_NAME = "ViT-B/16"
+
+class ViT_B_32(TimmViTAdapter):
+    """ViT-Base/32 entrenado con CLIP en LAION-2B."""
+    MODEL_NAME = "vit_base_patch32_clip_224.laion2b"
+    DISPLAY_NAME = "ViT-B/32"
+
+class ViT_L_14(TimmViTAdapter):
+    """ViT-Large/14 entrenado con CLIP en LAION-2B."""
+    MODEL_NAME = "vit_large_patch14_clip_224.laion2b"
+    DISPLAY_NAME = "ViT-L/14"
+
+
+class ViT_H_14(TimmViTAdapter):
+    """ViT-Huge/14 entrenado con CLIP en LAION-2B."""
+    MODEL_NAME = "vit_huge_patch14_clip_224.laion2b"
+    DISPLAY_NAME = "ViT-H/14"
