@@ -54,7 +54,12 @@ class BaseModelAdapter(Protocol):
     def forward_features(
         self, batch: Any, layers: Optional[list[int]] = None
     ) -> ArrayLike:
-        """Ejecuta el modelo y retorna las features."""
+        """Ejecuta el modelo y retorna las features.
+
+        Si `layers` es None, los adaptadores deben devolver todas las capas
+        disponibles (incluyendo embeddings iniciales y bloques) para métricas
+        por capa.
+        """
         match self.backend:
             case BackendEnum.TORCH:
                 return self.forward_features_torch(batch, layers)
@@ -77,7 +82,7 @@ class BaseModelAdapter(Protocol):
 
     def forward_features_torch(
         self, batch: Any, layers: Optional[list[int]] = None
-    ) -> torch.Tensor:
+    ) -> ArrayLike:
         """Ejecuta el modelo y retorna las features."""
         raise NotImplementedError
 

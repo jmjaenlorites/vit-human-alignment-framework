@@ -7,7 +7,15 @@ import jax.numpy as jnp
 if TYPE_CHECKING:
     from ..metrics.base import BaseMetric
 
-ArrayLike = np.ndarray | torch.Tensor | jnp.ndarray
+ArrayLike = (
+    np.ndarray
+    | torch.Tensor
+    | jnp.ndarray
+    | list[np.ndarray]
+    | list[torch.Tensor]
+    | list[jnp.ndarray]
+)
+
 
 @dataclass
 class ExperimentSpec:

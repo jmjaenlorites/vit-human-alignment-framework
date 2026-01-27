@@ -22,7 +22,10 @@ class AUC_Judd(BaseSaliencyMetric):
         ground_truth_fixation_map: torch.Tensor,
     ) -> torch.Tensor:
         scores = pred_map.flatten().to(torch.float)
-        fixations = (ground_truth_fixation_map.flatten() > 0).to(torch.float)
+        fixations = (ground_truth_fixation_map.flatten() > 0).to(
+            device=pred_map.device,
+            dtype=torch.float,
+        )
         num_fixations = fixations.sum()
         num_non_fix = fixations.numel() - num_fixations
         if num_fixations <= 0 or num_non_fix <= 0:
@@ -56,7 +59,10 @@ class PearsonCorrelationCoefficient(BaseSaliencyMetric):
         ground_truth_fixation_map: torch.Tensor,
     ) -> torch.Tensor:
         x = pred_map.flatten().to(torch.float)
-        y = ground_truth_saliency_map.flatten().to(torch.float)
+        y = ground_truth_saliency_map.flatten().to(
+            device=pred_map.device,
+            dtype=torch.float,
+        )
         x_centered = x - x.mean()
         y_centered = y - y.mean()
         denom = torch.sqrt((x_centered**2).sum()) * torch.sqrt((y_centered**2).sum())

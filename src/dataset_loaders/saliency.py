@@ -10,7 +10,7 @@ class BaseSaliencyDatasetLoader(BaseDatasetLoader):
     pass
 
 class SaliencyMIT1003DatasetLoader(BaseSaliencyDatasetLoader):
-    DATASET_PATH = MIT1003_DATASET_PATH = "/Users/jmjaenlorites/PhD/ViT-Alignment/ViT-saliency-alignment/FixaTons_repo/Datasets/MIT1003/"
+    DATASET_PATH = MIT1003_DATASET_PATH = "../ViT-saliency-alignment/FixaTons_repo/Datasets/MIT1003/"
     def get_paths(self) -> dict[str, list[str]]:
         return {
             "stimulus": [os.path.join(self.DATASET_PATH, 'STIMULI', f) for f in os.listdir(os.path.join(self.DATASET_PATH, 'STIMULI')) if f.lower().endswith(('.png', '.jpg', '.jpeg'))],
