@@ -98,8 +98,11 @@ class LevelsDataset(Dataset):
 
         # Get the selected image filename (not full path)
         selected = os.path.basename(self.selected_images[idx])
+        img1_name = os.path.basename(self.image1_paths[idx])
+        img2_name = os.path.basename(self.image2_paths[idx])
+        img3_name = os.path.basename(self.image3_paths[idx])
 
-        return img1, img2, img3, selected
+        return img1, img2, img3, selected, img1_name, img2_name, img3_name
 
 
 class LevelsTorchDatasetLoader(BaseTorchDatasetLoader, LevelsDatasetLoader):
@@ -110,7 +113,7 @@ class LevelsTorchDatasetLoader(BaseTorchDatasetLoader, LevelsDatasetLoader):
         num_workers: int,
         split: Literal[
             "between_class", "class_border", "within_class"
-        ] = "between_class",
+        ] = "class_border",
         transform: Optional[Callable[[Any], Any]] = None,
     ):
         BaseTorchDatasetLoader.__init__(
@@ -126,5 +129,3 @@ class LevelsTorchDatasetLoader(BaseTorchDatasetLoader, LevelsDatasetLoader):
     def get_dataset(self, transform: Optional[Callable[[Any], Any]] = None) -> Dataset:
         paths = self.get_paths()
         return LevelsDataset(paths, transform=self.transform)
-
-

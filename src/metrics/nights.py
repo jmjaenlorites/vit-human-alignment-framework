@@ -149,7 +149,7 @@ class NightsMetricsCalculator(BaseMetricCalculator):
         match self._backend:
             case BackendEnum.TORCH:
                 return NightsTorchDatasetLoader(
-                    batch_size=32, shuffle=False, num_workers=2, transform=transform
+                    batch_size=32, shuffle=False, num_workers=0, transform=transform
                 )
             case BackendEnum.JAX:
                 raise ValueError(f"Backend {self._backend} not supported")

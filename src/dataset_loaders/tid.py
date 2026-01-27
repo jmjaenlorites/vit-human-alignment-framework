@@ -2,8 +2,9 @@ import os
 import pandas as pd
 from torch.utils.data import Dataset
 from typing import Optional, Callable, Any
+from PIL import Image
+import torchvision.transforms.functional as F
 from .base import BaseDatasetLoader, BaseTorchDatasetLoader
-import torchvision
 
 
 class BaseTIDDatasetLoader(BaseDatasetLoader):
@@ -49,9 +50,12 @@ class TID2013Dataset(Dataset):
         return len(self.reference_paths)
 
     def __getitem__(self, idx):
-        reference = torchvision.io.read_image(self.reference_paths[idx]) / 255.0
-        distorted = torchvision.io.read_image(self.distorted_paths[idx]) / 255.0
+        reference = Image.open(self.reference_paths[idx]).convert("RGB")
+        distorted = Image.open(self.distorted_paths[idx]).convert("RGB")
         mos = self.mos_scores[idx]
+
+        reference = F.to_tensor(reference)
+        distorted = F.to_tensor(distorted)
 
         if self.transform:
             reference = self.transform(reference)

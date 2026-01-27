@@ -2,8 +2,10 @@ import os
 import pandas as pd
 from torch.utils.data import Dataset
 from typing import Optional, Callable, Any
+from PIL import Image
+import torchvision.transforms.functional as F
 from .base import BaseDatasetLoader, BaseTorchDatasetLoader
-import torchvision
+
 
 class BaseNightsDatasetLoader(BaseDatasetLoader):
     pass
@@ -54,9 +56,13 @@ class NightsDataset(Dataset):
         return len(self.ref_paths)
 
     def __getitem__(self, idx):
-        reference = torchvision.io.read_image(self.ref_paths[idx]) / 255.0
-        left = torchvision.io.read_image(self.left_paths[idx]) / 255.0
-        right = torchvision.io.read_image(self.right_paths[idx]) / 255.0
+        reference = Image.open(self.ref_paths[idx]).convert("RGB")
+        left = Image.open(self.left_paths[idx]).convert("RGB")
+        right = Image.open(self.right_paths[idx]).convert("RGB")
+
+        reference = F.to_tensor(reference)
+        left = F.to_tensor(left)
+        right = F.to_tensor(right)
 
         if self.transform:
             reference = self.transform(reference)

@@ -1,3 +1,4 @@
+import logging
 import torch
 import json
 from typing import Any, Callable, Optional, Literal
@@ -7,6 +8,8 @@ from .base import BaseMetric, BaseMetricCalculator
 from ..dataset_loaders.tid import TID2013TorchDatasetLoader
 from ..models.base import BaseModelAdapter, ForwardOutputs
 from ..utils.common_enums import BackendEnum
+
+logger = logging.getLogger(__name__)
 
 
 class BaseTIDMetric(BaseMetric):
@@ -91,7 +94,19 @@ class SpearmanCorrelationMOS(BaseTIDMetric):
         correlations = []
         for layer_idx, layer_similarities in enumerate(self.similarities):
             if len(layer_similarities) > 0:
-                corr, _ = spearmanr(layer_similarities, self.mos_scores)
+                if len(layer_similarities) != len(self.mos_scores):
+                    logger.warning(
+                        "TID metric length mismatch: similarities=%s, mos_scores=%s",
+                        len(layer_similarities),
+                        len(self.mos_scores),
+                    )
+                min_len = min(len(layer_similarities), len(self.mos_scores))
+                if min_len == 0:
+                    correlations.append(float("nan"))
+                    continue
+                corr, _ = spearmanr(
+                    layer_similarities[:min_len], self.mos_scores[:min_len]
+                )
                 correlations.append(float(corr))
             else:
                 correlations.append(float("nan"))

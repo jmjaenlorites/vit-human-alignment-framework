@@ -1,6 +1,10 @@
 from typing import Optional, List, Any
+import logging
 import pandas as pd
 from ..metrics.saliency import SaliencyMetricsCalculator
+from ..metrics.tid import TIDMetricsCalculator
+from ..metrics.levels import LevelsMetricsCalculator
+from ..metrics.nights import NightsMetricsCalculator
 
 from ..utils.common_types import ExperimentSpec
 from ..metrics.base import BaseMetric
@@ -9,8 +13,16 @@ from ..utils.common_enums import BackendEnum
 from ..utils.common_utils import METRIC_PREFIX
 from ..models import load_model
 
+logger = logging.getLogger(__name__)
+
+
 class Runner:
-    def __init__(self, csv_path: str, output_path: Optional[str] = None, backend: BackendEnum = BackendEnum.TORCH):
+    def __init__(
+        self,
+        csv_path: str,
+        output_path: Optional[str] = None,
+        backend: BackendEnum = BackendEnum.TORCH,
+    ):
         self.csv_path = csv_path
         self.output_path = output_path
         self.backend = backend
@@ -19,42 +31,127 @@ class Runner:
         df = self._load_csv()
         experiment_specs = []
         for index, row in df.iterrows():
-            metric_columns = [col for col in df.columns if col.startswith(METRIC_PREFIX)]
+            metric_columns = [
+                col for col in df.columns if col.startswith(METRIC_PREFIX)
+            ]
             pending_metrics = self.pending_metrics(row, metric_columns)
             extra_config = row.to_dict()
-            experiment_specs.append(ExperimentSpec(model_name=row["model_name"], metric_columns=metric_columns, pending_metrics=pending_metrics, extra_config=extra_config, row_index=index))
+            experiment_specs.append(
+                ExperimentSpec(
+                    model_name=row["model_name"],
+                    metric_columns=metric_columns,
+                    pending_metrics=pending_metrics,
+                    extra_config=extra_config,
+                    row_index=index,
+                )
+            )
         return experiment_specs, df
 
-    def pending_metrics(self, row: pd.Series, metric_columns: List[str]) -> List[BaseMetric]:
+    def pending_metrics(
+        self, row: pd.Series, metric_columns: List[str]
+    ) -> List[BaseMetric]:
         """Devuelve columnas de métricas vacías (pendientes)."""
-        return [load_metric(metric_col) for metric_col in metric_columns if self._is_cell_empty(row[metric_col])]
+        return [
+            load_metric(metric_col)
+            for metric_col in metric_columns
+            if self._is_cell_empty(row[metric_col])
+        ]
 
     def execute(self) -> None:
         experiment_specs, df = self.load_experiment_specs()
         for experiment_spec in experiment_specs:
-            print(experiment_spec)
+            logger.info("Experiment spec: %s", experiment_spec)
 
             if not experiment_spec.pending_metrics:
                 continue
 
             model = load_model(experiment_spec.model_name)
             # Create the metric instances with the backend that match the model backend
-            pending_metrics = [metric(model.backend) for metric in experiment_spec.pending_metrics]
+            pending_metrics = [
+                metric(model.backend) for metric in experiment_spec.pending_metrics
+            ]
 
-            saliency_metrics = [metric for metric in pending_metrics if metric.type == "saliency"]
-            perceptual_metrics = [metric for metric in pending_metrics if metric.type == "perceptual"]
+            saliency_metrics = [
+                metric for metric in pending_metrics if metric.type == "saliency"
+            ]
+            perceptual_metrics = [
+                metric for metric in pending_metrics if metric.type == "perceptual"
+            ]
+            tid_metrics = [
+                metric
+                for metric in perceptual_metrics
+                if metric.name.startswith("tid_")
+            ]
+            levels_metrics = [
+                metric
+                for metric in perceptual_metrics
+                if metric.name.startswith("levels_")
+            ]
+            nights_metrics = [
+                metric
+                for metric in perceptual_metrics
+                if metric.name.startswith("nights_")
+            ]
 
             if saliency_metrics:
-                saliency_metrics_calculator = SaliencyMetricsCalculator(self.backend, saliency_metrics)
+                saliency_metrics_calculator = SaliencyMetricsCalculator(
+                    self.backend, saliency_metrics
+                )
                 saliency_results = saliency_metrics_calculator.run(model)
-                self._update_cells(df, experiment_spec.row_index, [metric.name for metric in saliency_metrics], [saliency_results[metric.name] for metric in saliency_metrics])
+                self._update_cells(
+                    df,
+                    experiment_spec.row_index,
+                    [metric.name for metric in saliency_metrics],
+                    [saliency_results[metric.name] for metric in saliency_metrics],
+                )
 
-            # if perceptual_metrics:
-            #     perceptual_metrics_calculator = PerceptualMetricsCalculator(self.backend, perceptual_metrics)
-            #     perceptual_results = perceptual_metrics_calculator.run(model)
-            #     for metric in perceptual_metrics:
-            #         self._update_cell(df, experiment_spec.row_index, metric.name, perceptual_results[metric.name])
+            if tid_metrics:
+                logger.info(
+                    "Running TID metrics: %s",
+                    [metric.name for metric in tid_metrics],
+                )
+                tid_metrics_calculator = TIDMetricsCalculator(
+                    self.backend, metrics=tid_metrics
+                )
+                tid_results = tid_metrics_calculator.run(model)
+                self._update_cells(
+                    df,
+                    experiment_spec.row_index,
+                    [metric.name for metric in tid_metrics],
+                    [tid_results[metric.name] for metric in tid_metrics],
+                )
 
+            if levels_metrics:
+                logger.info(
+                    "Running Levels metrics: %s",
+                    [metric.name for metric in levels_metrics],
+                )
+                levels_metrics_calculator = LevelsMetricsCalculator(
+                    self.backend, metrics=levels_metrics
+                )
+                levels_results = levels_metrics_calculator.run(model)
+                self._update_cells(
+                    df,
+                    experiment_spec.row_index,
+                    [metric.name for metric in levels_metrics],
+                    [levels_results[metric.name] for metric in levels_metrics],
+                )
+
+            if nights_metrics:
+                logger.info(
+                    "Running Nights metrics: %s",
+                    [metric.name for metric in nights_metrics],
+                )
+                nights_metrics_calculator = NightsMetricsCalculator(
+                    self.backend, metrics=nights_metrics
+                )
+                nights_results = nights_metrics_calculator.run(model)
+                self._update_cells(
+                    df,
+                    experiment_spec.row_index,
+                    [metric.name for metric in nights_metrics],
+                    [nights_results[metric.name] for metric in nights_metrics],
+                )
 
     def _load_csv(self) -> pd.DataFrame:
         return pd.read_csv(self.csv_path)
@@ -65,11 +162,19 @@ class Runner:
         else:
             df.to_csv(self.csv_path, index=False)
 
-    def _update_cells(self, df: pd.DataFrame, row_index: int, metric_names: List[str], results: List[Any], save_csv: bool = True) -> None:
+    def _update_cells(
+        self,
+        df: pd.DataFrame,
+        row_index: int,
+        metric_names: List[str],
+        results: List[Any],
+        save_csv: bool = True,
+    ) -> None:
         for metric_name, result in zip(metric_names, results):
             if not result:
                 continue
-            df.loc[row_index, METRIC_PREFIX +metric_name] = result
+            df.loc[row_index, METRIC_PREFIX + metric_name] = result
+            logger.info("Updated metric %s", metric_name)
         if save_csv:
             self._write_csv(df)
 
@@ -78,7 +183,12 @@ class Runner:
             return True
         if isinstance(cell, str):
             cell_lower = cell.lower()
-            if cell_lower == "none" or cell_lower == "nan" or cell_lower == "null" or cell_lower == "":
+            if (
+                cell_lower == "none"
+                or cell_lower == "nan"
+                or cell_lower == "null"
+                or cell_lower == ""
+            ):
                 return True
         if isinstance(cell, float):
             return pd.isna(cell)

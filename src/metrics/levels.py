@@ -39,7 +39,10 @@ class TripletAccuracy(BaseLevelsMetric):
         batch_results: debe contener 'features_img1', 'features_img2', 'features_img3'
                       cada uno con features por capa
         """
-        img1_batch, img2_batch, img3_batch, selected_batch = batch
+        img1_batch, img2_batch, img3_batch, selected_batch, *extra = batch
+        img1_names = extra[0] if len(extra) > 0 else None
+        img2_names = extra[1] if len(extra) > 1 else None
+        img3_names = extra[2] if len(extra) > 2 else None
 
         features_img1 = batch_results["features_img1"]
         features_img2 = batch_results["features_img2"]
@@ -82,9 +85,21 @@ class TripletAccuracy(BaseLevelsMetric):
 
                 # Necesitamos comparar con los nombres de archivo originales
                 # selected_batch contiene nombres de archivo sin path
-                img1_name = os.path.basename(self.get_image_path(batch, i, 0))
-                img2_name = os.path.basename(self.get_image_path(batch, i, 1))
-                img3_name = os.path.basename(self.get_image_path(batch, i, 2))
+                img1_name = (
+                    img1_names[i]
+                    if img1_names is not None
+                    else os.path.basename(self.get_image_path(batch, i, 0))
+                )
+                img2_name = (
+                    img2_names[i]
+                    if img2_names is not None
+                    else os.path.basename(self.get_image_path(batch, i, 1))
+                )
+                img3_name = (
+                    img3_names[i]
+                    if img3_names is not None
+                    else os.path.basename(self.get_image_path(batch, i, 2))
+                )
 
                 # Verificar predicción
                 is_correct = False
@@ -130,6 +145,8 @@ class TripletAccuracy(BaseLevelsMetric):
         Calcula la precisión por capa después de procesar todo el dataset.
         Retorna un dict con el array de precisiones serializado como JSON.
         """
+        # TODO: Devolver resultados para todos los splits por defecto (p.ej.,
+        # serializando un JSON con cada split o usando otra representación).
         accuracies = []
         for layer_idx, correct in enumerate(self.correct_per_layer):
             if self.total > 0:
@@ -190,8 +207,8 @@ class LevelsMetricsCalculator(BaseMetricCalculator):
         """
         Para Levels, necesitamos hacer forward en triplets de imágenes.
         """
-        # batch = (img1, img2, img3, selected_image_filenames)
-        img1, img2, img3, selected = batch
+        # batch = (img1, img2, img3, selected_image_filenames, img1_name, img2_name, img3_name)
+        img1, img2, img3, selected, *_ = batch
 
         # Forward para cada imagen del triplet
         batch_results_img1 = model.forward(

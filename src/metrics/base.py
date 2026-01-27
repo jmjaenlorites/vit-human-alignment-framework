@@ -92,6 +92,9 @@ class BaseSaliencyMetric(BaseMetric):
                     ground_truth_saliency_maps,
                     ground_truth_fixation_maps,
                 ):
+                    device = predicted_saliency_map.device
+                    ground_truth_saliency_map = ground_truth_saliency_map.to(device)
+                    ground_truth_fixation_map = ground_truth_fixation_map.to(device)
                     value = self._calculate_torch(
                         predicted_saliency_map,
                         ground_truth_saliency_map,
