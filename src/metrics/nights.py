@@ -135,13 +135,17 @@ class NightsMetricsCalculator(BaseMetricCalculator):
     """
 
     def __init__(
-        self, backend: BackendEnum, metrics: Optional[list[BaseNightsMetric]] = None
+        self,
+        backend: BackendEnum,
+        metrics: Optional[list[BaseNightsMetric]] = None,
+        dataset_path: Optional[str] = None,
     ):
         self.name = "NightsMetricsCalculator"
         self._metrics: list[BaseNightsMetric] = metrics or [PreferenceAccuracy(backend)]
         self._backend = backend
         self._return_saliency = False
         self._return_features = True
+        self._dataset_path = dataset_path
 
     def get_dataset_loader(
         self, transform: Optional[Callable[[Any], Any]] = None
@@ -150,7 +154,11 @@ class NightsMetricsCalculator(BaseMetricCalculator):
         match self._backend:
             case BackendEnum.TORCH:
                 return NightsTorchDatasetLoader(
-                    batch_size=32, shuffle=False, num_workers=0, transform=transform
+                    batch_size=32,
+                    shuffle=False,
+                    num_workers=0,
+                    transform=transform,
+                    dataset_path=self._dataset_path,
                 )
             case BackendEnum.JAX:
                 raise ValueError(f"Backend {self._backend} not supported")

@@ -178,6 +178,8 @@ class LevelsMetricsCalculator(BaseMetricCalculator):
             "between_class", "class_border", "within_class"
         ] = "between_class",
         metrics: Optional[list[BaseLevelsMetric]] = None,
+        levels_path: Optional[str] = None,
+        imagenet_path: Optional[str] = None,
     ):
         self.name = f"LevelsMetricsCalculator_{split}"
         self._metrics: list[BaseLevelsMetric] = metrics or [TripletAccuracy(backend)]
@@ -185,6 +187,8 @@ class LevelsMetricsCalculator(BaseMetricCalculator):
         self._return_saliency = False
         self._return_features = True
         self.split = split
+        self._levels_path = levels_path
+        self._imagenet_path = imagenet_path
 
     def get_dataset_loader(
         self, transform: Optional[Callable[[Any], Any]] = None
@@ -198,6 +202,8 @@ class LevelsMetricsCalculator(BaseMetricCalculator):
                     num_workers=2,
                     split=self.split,
                     transform=transform,
+                    levels_path=self._levels_path,
+                    imagenet_path=self._imagenet_path,
                 )
             case BackendEnum.JAX:
                 raise ValueError(f"Backend {self._backend} not supported")

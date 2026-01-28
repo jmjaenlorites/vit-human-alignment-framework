@@ -21,30 +21,38 @@ class LevelsDatasetLoader(BaseLevelsDatasetLoader):
         split: Literal[
             "between_class", "class_border", "within_class"
         ] = "between_class",
+        levels_path: Optional[str] = None,
+        imagenet_path: Optional[str] = None,
     ):
         self.split = split
+        self.levels_path = levels_path or os.environ.get(
+            "LEVELS_DATASET_PATH", self.LEVELS_PATH
+        )
+        self.imagenet_path = imagenet_path or os.environ.get(
+            "IMAGENET_PATH", self.IMAGENET_PATH
+        )
         super().__init__(name=f"Levels_{split}")
 
     def get_paths(self) -> dict[str, Any]:
         """Returns paths to images and the dataframe with triplet information."""
-        csv_path = os.path.join(self.LEVELS_PATH, f"{self.split}.csv")
+        csv_path = os.path.join(self.levels_path, f"{self.split}.csv")
         df = pd.read_csv(csv_path)
 
         image1_paths = [
             os.path.join(
-                self.IMAGENET_PATH, row.image1Path.split("_")[0], row.image1Path
+                self.imagenet_path, row.image1Path.split("_")[0], row.image1Path
             )
             for _, row in df.iterrows()
         ]
         image2_paths = [
             os.path.join(
-                self.IMAGENET_PATH, row.image2Path.split("_")[0], row.image2Path
+                self.imagenet_path, row.image2Path.split("_")[0], row.image2Path
             )
             for _, row in df.iterrows()
         ]
         image3_paths = [
             os.path.join(
-                self.IMAGENET_PATH, row.image3Path.split("_")[0], row.image3Path
+                self.imagenet_path, row.image3Path.split("_")[0], row.image3Path
             )
             for _, row in df.iterrows()
         ]
@@ -117,6 +125,8 @@ class LevelsTorchDatasetLoader(BaseTorchDatasetLoader, LevelsDatasetLoader):
             "between_class", "class_border", "within_class"
         ] = "class_border",
         transform: Optional[Callable[[Any], Any]] = None,
+        levels_path: Optional[str] = None,
+        imagenet_path: Optional[str] = None,
     ):
         BaseTorchDatasetLoader.__init__(
             self,
@@ -125,7 +135,9 @@ class LevelsTorchDatasetLoader(BaseTorchDatasetLoader, LevelsDatasetLoader):
             shuffle=shuffle,
             num_workers=num_workers,
         )
-        LevelsDatasetLoader.__init__(self, split=split)
+        LevelsDatasetLoader.__init__(
+            self, split=split, levels_path=levels_path, imagenet_path=imagenet_path
+        )
         self.transform = transform
 
     def get_dataset(self, transform: Optional[Callable[[Any], Any]] = None) -> Dataset:

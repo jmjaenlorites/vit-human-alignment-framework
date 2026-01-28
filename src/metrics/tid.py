@@ -128,7 +128,10 @@ class TIDMetricsCalculator(BaseMetricCalculator):
     """
 
     def __init__(
-        self, backend: BackendEnum, metrics: Optional[list[BaseTIDMetric]] = None
+        self,
+        backend: BackendEnum,
+        metrics: Optional[list[BaseTIDMetric]] = None,
+        dataset_path: Optional[str] = None,
     ):
         self.name = "TIDMetricsCalculator"
         self._metrics: list[BaseTIDMetric] = metrics or [
@@ -137,6 +140,7 @@ class TIDMetricsCalculator(BaseMetricCalculator):
         self._backend = backend
         self._return_saliency = False
         self._return_features = True
+        self._dataset_path = dataset_path
 
     def get_dataset_loader(
         self, transform: Optional[Callable[[Any], Any]] = None
@@ -145,7 +149,11 @@ class TIDMetricsCalculator(BaseMetricCalculator):
         match self._backend:
             case BackendEnum.TORCH:
                 return TID2013TorchDatasetLoader(
-                    batch_size=32, shuffle=False, num_workers=2, transform=transform
+                    batch_size=32,
+                    shuffle=False,
+                    num_workers=2,
+                    transform=transform,
+                    dataset_path=self._dataset_path,
                 )
             case BackendEnum.JAX:
                 raise ValueError(f"Backend {self._backend} not supported")
