@@ -1,7 +1,8 @@
-from typing import Protocol, Iterator, Any
+from typing import Any, Iterator, Protocol
 
 import torch
 from torch.utils.data import Dataset
+
 
 class BaseDatasetLoader(Protocol):
     def __init__(self, name: str):
@@ -9,7 +10,6 @@ class BaseDatasetLoader(Protocol):
 
     def get_iterator(self) -> Iterator[Any]:
         """Retorna un iterador sobre el dataset."""
-
 
 
 class BaseTorchDatasetLoader(BaseDatasetLoader):
@@ -21,8 +21,12 @@ class BaseTorchDatasetLoader(BaseDatasetLoader):
 
     def get_iterator(self) -> Iterator[Any]:
         """Retorna un iterador sobre el dataset."""
-        return torch.utils.data.DataLoader(self.get_dataset(), batch_size=self.batch_size, shuffle=self.shuffle, num_workers=self.num_workers)
+        return torch.utils.data.DataLoader(
+            self.get_dataset(),
+            batch_size=self.batch_size,
+            shuffle=self.shuffle,
+            num_workers=self.num_workers,
+        )
 
     def get_dataset(self) -> Dataset:
         """Retorna un dataset de PyTorch."""
-        

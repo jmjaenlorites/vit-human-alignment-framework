@@ -25,8 +25,11 @@ vit-b16,,
 - Ejecuta:
 
 ```bash
-python main.py
+uv sync
+uv run main.py
 ```
+
+\* Asegurate de tener uv instalado
 
 ### Documentación de diseño y guía de extensión
 La documentación vive en `docs/`:

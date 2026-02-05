@@ -1,8 +1,10 @@
-from ..utils.common_enums import BackendEnum
-import torch
 import jax
+import torch
+
+from ..utils.common_enums import BackendEnum
 
 METRIC_PREFIX: str = "metric_"
+
 
 def get_backend_device(backend: BackendEnum):
     match backend:
