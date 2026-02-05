@@ -105,9 +105,18 @@ class SpearmanCorrelationMOS(BaseTIDMetric):
                 if min_len == 0:
                     correlations.append(float("nan"))
                     continue
-                corr, _ = spearmanr(
-                    layer_similarities[:min_len], self.mos_scores[:min_len]
-                )
+                similarities_slice = layer_similarities[:min_len]
+                mos_slice = self.mos_scores[:min_len]
+
+                # Si las similitudes no tienen varianza, la correlación no está definida
+                sim_tensor = torch.tensor(similarities_slice)
+                if torch.all(torch.isfinite(sim_tensor)) and (
+                    torch.max(torch.abs(sim_tensor - sim_tensor.mean())) < 1e-6
+                ):
+                    correlations.append(float("nan"))
+                    continue
+
+                corr, _ = spearmanr(similarities_slice, mos_slice)
                 correlations.append(float(corr))
             else:
                 correlations.append(float("nan"))
@@ -128,7 +137,10 @@ class TIDMetricsCalculator(BaseMetricCalculator):
     """
 
     def __init__(
-        self, backend: BackendEnum, metrics: Optional[list[BaseTIDMetric]] = None
+        self,
+        backend: BackendEnum,
+        metrics: Optional[list[BaseTIDMetric]] = None,
+        dataset_path: Optional[str] = None,
     ):
         self.name = "TIDMetricsCalculator"
         self._metrics: list[BaseTIDMetric] = metrics or [
@@ -137,6 +149,7 @@ class TIDMetricsCalculator(BaseMetricCalculator):
         self._backend = backend
         self._return_saliency = False
         self._return_features = True
+        self._dataset_path = dataset_path
 
     def get_dataset_loader(
         self, transform: Optional[Callable[[Any], Any]] = None
@@ -145,7 +158,11 @@ class TIDMetricsCalculator(BaseMetricCalculator):
         match self._backend:
             case BackendEnum.TORCH:
                 return TID2013TorchDatasetLoader(
-                    batch_size=32, shuffle=False, num_workers=2, transform=transform
+                    batch_size=32,
+                    shuffle=False,
+                    num_workers=2,
+                    transform=transform,
+                    dataset_path=self._dataset_path,
                 )
             case BackendEnum.JAX:
                 raise ValueError(f"Backend {self._backend} not supported")

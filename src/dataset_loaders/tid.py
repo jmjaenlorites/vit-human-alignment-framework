@@ -16,17 +16,23 @@ class BaseTIDDatasetLoader(BaseDatasetLoader):
 class TID2013DatasetLoader(BaseTIDDatasetLoader):
     DATASET_PATH = "/media/disk/vista/BBDD_video_image/Image_Quality/TID/TID2013"
 
+    def __init__(self, dataset_path: Optional[str] = None):
+        self.dataset_path = dataset_path or os.environ.get(
+            "TID_DATASET_PATH", self.DATASET_PATH
+        )
+        super().__init__(name="TID2013")
+
     def get_paths(self) -> dict[str, Any]:
         """Returns paths to images and the dataframe with MOS scores."""
-        csv_path = os.path.join(self.DATASET_PATH, "image_pairs_mos.csv")
+        csv_path = os.path.join(self.dataset_path, "image_pairs_mos.csv")
         df = pd.read_csv(csv_path, index_col=0)
 
         reference_paths = [
-            os.path.join(self.DATASET_PATH, "reference_images", row.Reference)
+            os.path.join(self.dataset_path, "reference_images", row.Reference)
             for _, row in df.iterrows()
         ]
         distorted_paths = [
-            os.path.join(self.DATASET_PATH, "distorted_images", row.Distorted)
+            os.path.join(self.dataset_path, "distorted_images", row.Distorted)
             for _, row in df.iterrows()
         ]
         mos_scores = df.MOS.values.tolist()
@@ -73,13 +79,16 @@ class TID2013TorchDatasetLoader(BaseTorchDatasetLoader, TID2013DatasetLoader):
         shuffle: bool,
         num_workers: int,
         transform: Optional[Callable[[Any], Any]] = None,
+        dataset_path: Optional[str] = None,
     ):
-        super().__init__(
+        BaseTorchDatasetLoader.__init__(
+            self,
             name="TID2013Torch",
             batch_size=batch_size,
             shuffle=shuffle,
             num_workers=num_workers,
         )
+        TID2013DatasetLoader.__init__(self, dataset_path=dataset_path)
         self.transform = transform
 
     def get_dataset(self, transform: Optional[Callable[[Any], Any]] = None) -> Dataset:

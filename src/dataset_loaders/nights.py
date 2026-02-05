@@ -16,19 +16,25 @@ class BaseNightsDatasetLoader(BaseDatasetLoader):
 class NightsDatasetLoader(BaseNightsDatasetLoader):
     DATASET_PATH = "/media/disk/vista/BBDD_video_image/Image_Quality/nights/"
 
+    def __init__(self, dataset_path: Optional[str] = None):
+        self.dataset_path = dataset_path or os.environ.get(
+            "NIGHTS_DATASET_PATH", self.DATASET_PATH
+        )
+        super().__init__(name="Nights")
+
     def get_paths(self) -> dict[str, Any]:
         """Returns paths to images and the dataframe with voting information."""
-        csv_path = os.path.join(self.DATASET_PATH, "data.csv")
+        csv_path = os.path.join(self.dataset_path, "data.csv")
         df = pd.read_csv(csv_path)
 
         ref_paths = [
-            os.path.join(self.DATASET_PATH, row.ref_path) for _, row in df.iterrows()
+            os.path.join(self.dataset_path, row.ref_path) for _, row in df.iterrows()
         ]
         left_paths = [
-            os.path.join(self.DATASET_PATH, row.left_path) for _, row in df.iterrows()
+            os.path.join(self.dataset_path, row.left_path) for _, row in df.iterrows()
         ]
         right_paths = [
-            os.path.join(self.DATASET_PATH, row.right_path) for _, row in df.iterrows()
+            os.path.join(self.dataset_path, row.right_path) for _, row in df.iterrows()
         ]
         left_votes = df.left_vote.values.tolist()
         right_votes = df.right_vote.values.tolist()
@@ -84,13 +90,16 @@ class NightsTorchDatasetLoader(BaseTorchDatasetLoader, NightsDatasetLoader):
         shuffle: bool,
         num_workers: int,
         transform: Optional[Callable[[Any], Any]] = None,
+        dataset_path: Optional[str] = None,
     ):
-        super().__init__(
+        BaseTorchDatasetLoader.__init__(
+            self,
             name="NightsTorch",
             batch_size=batch_size,
             shuffle=shuffle,
             num_workers=num_workers,
         )
+        NightsDatasetLoader.__init__(self, dataset_path=dataset_path)
         self.transform = transform
 
     def get_dataset(self, transform: Optional[Callable[[Any], Any]] = None) -> Dataset:
