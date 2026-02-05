@@ -105,9 +105,18 @@ class SpearmanCorrelationMOS(BaseTIDMetric):
                 if min_len == 0:
                     correlations.append(float("nan"))
                     continue
-                corr, _ = spearmanr(
-                    layer_similarities[:min_len], self.mos_scores[:min_len]
-                )
+                similarities_slice = layer_similarities[:min_len]
+                mos_slice = self.mos_scores[:min_len]
+
+                # Si las similitudes no tienen varianza, la correlación no está definida
+                sim_tensor = torch.tensor(similarities_slice)
+                if torch.all(torch.isfinite(sim_tensor)) and (
+                    torch.max(torch.abs(sim_tensor - sim_tensor.mean())) < 1e-6
+                ):
+                    correlations.append(float("nan"))
+                    continue
+
+                corr, _ = spearmanr(similarities_slice, mos_slice)
                 correlations.append(float(corr))
             else:
                 correlations.append(float("nan"))

@@ -32,7 +32,7 @@ Install test dependencies:
 
 ```bash
 cd vit-human-alignment-framework
-uv pip install -e ".[dev]"
+uv sync --extra dev
 ```
 
 ## Generating Golden Fixtures
@@ -48,12 +48,14 @@ This will:
 - Process small batches from each test dataset
 - Save model outputs and expected metrics to `tests/fixtures/`
 
+_Note: This is already done here. Don't do it again unless there is no fixtures!_
+
 ## Running Tests
 
 ### All tests
 
 ```bash
-uv run pytest tests/
+uv run pytest
 ```
 
 ### Unit tests only (fast)

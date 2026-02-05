@@ -17,10 +17,10 @@ from src.dataset_loaders.levels import LevelsTorchDatasetLoader
 from src.dataset_loaders.nights import NightsTorchDatasetLoader
 from src.dataset_loaders.saliency import SaliencyMIT1003TorchDatasetLoader
 from src.dataset_loaders.tid import TID2013TorchDatasetLoader
-from src.metrics.levels import LevelsMetricsCalculator
-from src.metrics.nights import NightsMetricsCalculator
-from src.metrics.saliency import SaliencyMetricsCalculator
-from src.metrics.tid import TIDMetricsCalculator
+from src.metrics.levels import TripletAccuracy
+from src.metrics.nights import PreferenceAccuracy
+from src.metrics.saliency import AUC_Judd, PearsonCorrelationCoefficient
+from src.metrics.tid import SpearmanCorrelationMOS
 from src.models.vit_b16 import ViT_B_16
 from src.utils.common_enums import BackendEnum
 
@@ -52,13 +52,17 @@ def generate_saliency_golden(
     saliency_maps = [s.cpu() for s in model_output["saliency"]]
     features = [f.cpu() for f in model_output["features"]]
     
-    # Calculate metrics
-    calculator = SaliencyMetricsCalculator(BackendEnum.TORCH)
-    results = calculator.run(model)
-    
-    # Parse expected values
-    expected_auc_judd = json.loads(results["saliency_auc_judd"])
-    expected_pearson = json.loads(results["saliency_pearson_correlation_coefficient"])
+    # Calculate metrics only for this batch (consistent with stored features)
+    auc_metric = AUC_Judd(BackendEnum.TORCH)
+    pearson_metric = PearsonCorrelationCoefficient(BackendEnum.TORCH)
+    batch = (stimulus.cpu(), saliency_gt.cpu(), fixation_gt.cpu())
+    batch_results = {"saliency": saliency_maps, "features": features}
+    auc_metric.calculate(batch, batch_results)
+    pearson_metric.calculate(batch, batch_results)
+    expected_auc_judd = json.loads(auc_metric.finalize()["saliency_auc_judd"])
+    expected_pearson = json.loads(
+        pearson_metric.finalize()["saliency_pearson_correlation_coefficient"]
+    )
     
     # Save golden data
     golden_data = {
@@ -109,11 +113,12 @@ def generate_tid_golden(
     features_ref = [f.cpu() for f in model_output_ref["features"]]
     features_dist = [f.cpu() for f in model_output_dist["features"]]
     
-    # Calculate metrics
-    calculator = TIDMetricsCalculator(BackendEnum.TORCH, dataset_path=test_data_path)
-    results = calculator.run(model)
-    
-    expected_spearman = json.loads(results["tid_spearman_mos"])
+    # Calculate metrics only for this batch
+    metric = SpearmanCorrelationMOS(BackendEnum.TORCH)
+    batch = (reference_images.cpu(), distorted_images.cpu(), mos_scores)
+    batch_results = {"features_ref": features_ref, "features_dist": features_dist}
+    metric.calculate(batch, batch_results)
+    expected_spearman = json.loads(metric.finalize()["tid_spearman_mos"])
     
     # Save golden data
     golden_data = {
@@ -167,16 +172,24 @@ def generate_levels_golden(
     features_img2 = [f.cpu() for f in model_output_2["features"]]
     features_img3 = [f.cpu() for f in model_output_3["features"]]
     
-    # Calculate metrics
-    calculator = LevelsMetricsCalculator(
-        BackendEnum.TORCH,
-        split="between_class",
-        levels_path=test_data_path,
-        imagenet_path=images_path,
+    # Calculate metrics only for this batch
+    metric = TripletAccuracy(BackendEnum.TORCH)
+    batch = (
+        img1.cpu(),
+        img2.cpu(),
+        img3.cpu(),
+        list(selected),
+        list(img1_names),
+        list(img2_names),
+        list(img3_names),
     )
-    results = calculator.run(model)
-    
-    expected_accuracy = json.loads(results["levels_triplet_accuracy"])
+    batch_results = {
+        "features_img1": features_img1,
+        "features_img2": features_img2,
+        "features_img3": features_img3,
+    }
+    metric.calculate(batch, batch_results)
+    expected_accuracy = json.loads(metric.finalize()["levels_triplet_accuracy"])
     
     # Save golden data
     golden_data = {
@@ -233,13 +246,22 @@ def generate_nights_golden(
     features_left = [f.cpu() for f in model_output_left["features"]]
     features_right = [f.cpu() for f in model_output_right["features"]]
     
-    # Calculate metrics
-    calculator = NightsMetricsCalculator(
-        BackendEnum.TORCH, dataset_path=test_data_path
+    # Calculate metrics only for this batch
+    metric = PreferenceAccuracy(BackendEnum.TORCH)
+    batch = (
+        reference.cpu(),
+        left.cpu(),
+        right.cpu(),
+        left_votes,
+        right_votes,
     )
-    results = calculator.run(model)
-    
-    expected_accuracy = json.loads(results["nights_preference_accuracy"])
+    batch_results = {
+        "features_ref": features_ref,
+        "features_left": features_left,
+        "features_right": features_right,
+    }
+    metric.calculate(batch, batch_results)
+    expected_accuracy = json.loads(metric.finalize()["nights_preference_accuracy"])
     
     # Save golden data
     golden_data = {
