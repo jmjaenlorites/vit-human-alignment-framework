@@ -48,10 +48,16 @@ def nights_test_data_path(test_data_dir: Path) -> str:
     return str(test_data_dir / "nights")
 
 
+@pytest.fixture(scope="session")
+def visturing_test_data_path(test_data_dir: Path) -> str:
+    """Return path to visturing test data."""
+    return str(test_data_dir / "visturing")
+
+
 @pytest.fixture
 def mock_model() -> MagicMock:
     """Create a mock model that returns deterministic features and saliency maps.
-    
+
     Returns:
         Mock model with:
         - backend = BackendEnum.TORCH
@@ -64,7 +70,7 @@ def mock_model() -> MagicMock:
     mock.backend = BackendEnum.TORCH
     mock.transform = lambda x: x
     mock.device = torch.device("cpu")
-    
+
     def mock_forward(
         batch: torch.Tensor,
         return_features: bool = False,
@@ -76,20 +82,24 @@ def mock_model() -> MagicMock:
         num_tokens = 197  # CLS + 14x14 patches for 224x224 image
         hidden_dim = 768  # ViT-B/16 hidden dimension
         grid_size = 14  # sqrt(196) patches
-        
+
         result = {}
-        
+
         if return_features:
             # Create deterministic features per layer
             features = []
             for layer_idx in range(num_layers):
                 # Use layer index to create different but deterministic features
-                layer_features = torch.ones(batch_size, num_tokens, hidden_dim) * (layer_idx + 1) / num_layers
+                layer_features = (
+                    torch.ones(batch_size, num_tokens, hidden_dim)
+                    * (layer_idx + 1)
+                    / num_layers
+                )
                 features.append(layer_features)
             result["features"] = features
         else:
             result["features"] = None
-            
+
         if return_saliency:
             # Create deterministic saliency maps per layer
             saliency = []
@@ -99,26 +109,28 @@ def mock_model() -> MagicMock:
                 for i in range(grid_size):
                     for j in range(grid_size):
                         # Value depends on position and layer
-                        layer_saliency[:, i, j] = (i + j + layer_idx) / (2 * grid_size + num_layers)
+                        layer_saliency[:, i, j] = (i + j + layer_idx) / (
+                            2 * grid_size + num_layers
+                        )
                 saliency.append(layer_saliency)
             result["saliency"] = saliency
         else:
             result["saliency"] = None
-            
+
         return result
-    
+
     mock.forward = mock_forward
-    
+
     return mock
 
 
 @pytest.fixture(scope="session")
 def real_model() -> ViT_B_16:
     """Load real ViT_B_16 model (cached for session).
-    
+
     This fixture loads the actual model once per test session to avoid
     repeated downloads and initialization overhead.
-    
+
     Returns:
         ViT_B_16 model instance
     """
@@ -129,7 +141,7 @@ def real_model() -> ViT_B_16:
 @pytest.fixture
 def saliency_golden_data(fixtures_dir: Path) -> dict[str, Any]:
     """Load golden data for saliency metrics.
-    
+
     Returns:
         Dict with:
         - stimulus: Tensor of input images
@@ -140,17 +152,19 @@ def saliency_golden_data(fixtures_dir: Path) -> dict[str, Any]:
         - expected_pearson: Expected Pearson correlation per layer
     """
     golden_path = fixtures_dir / "saliency_golden.pt"
-    
+
     if not golden_path.exists():
-        pytest.skip(f"Golden data not found at {golden_path}. Run generate_golden_fixtures.py first.")
-    
+        pytest.skip(
+            f"Golden data not found at {golden_path}. Run generate_golden_fixtures.py first."
+        )
+
     return torch.load(golden_path)
 
 
 @pytest.fixture
 def tid_golden_data(fixtures_dir: Path) -> dict[str, Any]:
     """Load golden data for TID metrics.
-    
+
     Returns:
         Dict with:
         - reference_images: Reference image tensors
@@ -161,17 +175,19 @@ def tid_golden_data(fixtures_dir: Path) -> dict[str, Any]:
         - expected_spearman: Expected Spearman correlation per layer
     """
     golden_path = fixtures_dir / "tid_golden.pt"
-    
+
     if not golden_path.exists():
-        pytest.skip(f"Golden data not found at {golden_path}. Run generate_golden_fixtures.py first.")
-    
+        pytest.skip(
+            f"Golden data not found at {golden_path}. Run generate_golden_fixtures.py first."
+        )
+
     return torch.load(golden_path)
 
 
 @pytest.fixture
 def levels_golden_data(fixtures_dir: Path) -> dict[str, Any]:
     """Load golden data for Levels metrics.
-    
+
     Returns:
         Dict with:
         - img1: First image tensors
@@ -184,17 +200,19 @@ def levels_golden_data(fixtures_dir: Path) -> dict[str, Any]:
         - expected_accuracy: Expected accuracy per layer
     """
     golden_path = fixtures_dir / "levels_golden.pt"
-    
+
     if not golden_path.exists():
-        pytest.skip(f"Golden data not found at {golden_path}. Run generate_golden_fixtures.py first.")
-    
+        pytest.skip(
+            f"Golden data not found at {golden_path}. Run generate_golden_fixtures.py first."
+        )
+
     return torch.load(golden_path)
 
 
 @pytest.fixture
 def nights_golden_data(fixtures_dir: Path) -> dict[str, Any]:
     """Load golden data for Nights metrics.
-    
+
     Returns:
         Dict with:
         - reference: Reference image tensors
@@ -208,8 +226,10 @@ def nights_golden_data(fixtures_dir: Path) -> dict[str, Any]:
         - expected_accuracy: Expected accuracy per layer
     """
     golden_path = fixtures_dir / "nights_golden.pt"
-    
+
     if not golden_path.exists():
-        pytest.skip(f"Golden data not found at {golden_path}. Run generate_golden_fixtures.py first.")
-    
+        pytest.skip(
+            f"Golden data not found at {golden_path}. Run generate_golden_fixtures.py first."
+        )
+
     return torch.load(golden_path)
