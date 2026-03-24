@@ -241,3 +241,15 @@ class ViT_H_14(TimmViTAdapter):
 
     MODEL_NAME = "vit_huge_patch14_clip_224.laion2b"
     DISPLAY_NAME = "ViT-H/14"
+
+
+class DynamicTimmModelAdapter(TimmViTAdapter):
+    """Adaptador genérico para modelos de timm declarados dinámicamente."""
+
+    MODEL_NAME = ""
+    DISPLAY_NAME = ""
+
+    def __init__(self, timm_model_name: str, config: dict[str, Any] | None = None):
+        self.MODEL_NAME = timm_model_name
+        self.DISPLAY_NAME = timm_model_name
+        super().__init__(config or {})

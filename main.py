@@ -28,7 +28,10 @@ def setup_logging() -> None:
 def main() -> None:
     setup_logging()
     try:
-        runner = Runner(csv_path="data/vit-human-alignment-framework-test.csv")
+        runner = Runner(
+            json_path="data/experiments.example.json",
+            results_path="results.csv",
+        )
         runner.execute()
     except Exception:
         logger.exception("Runner failed")

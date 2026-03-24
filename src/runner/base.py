@@ -20,10 +20,14 @@ from ..metrics.visturing import (
     create_prop9_calculator,
     create_prop10_calculator,
 )
-from ..models import load_model
+from ..models import resolve_model
 from ..utils.common_enums import BackendEnum
 from ..utils.common_types import ExperimentSpec
 from ..utils.common_utils import METRIC_PREFIX
+from .config_schema import get_metric_spec
+from .json_source import JSONExperimentSource
+from .results_store import ResultsStore
+from .types import ResolvedExperiment
 
 logger = logging.getLogger(__name__)
 
@@ -31,12 +35,16 @@ logger = logging.getLogger(__name__)
 class Runner:
     def __init__(
         self,
-        csv_path: str,
+        csv_path: Optional[str] = None,
+        json_path: Optional[str] = None,
         output_path: Optional[str] = None,
+        results_path: Optional[str] = None,
         backend: BackendEnum = BackendEnum.TORCH,
     ):
         self.csv_path = csv_path
+        self.json_path = json_path
         self.output_path = output_path
+        self.results_path = results_path
         self.backend = backend
 
     def load_experiment_specs(self) -> tuple[List[ExperimentSpec], pd.DataFrame]:
@@ -89,6 +97,13 @@ class Runner:
         ]
 
     def execute(self) -> None:
+        if self.json_path:
+            self._execute_json()
+            return
+
+        if not self.csv_path:
+            raise ValueError("csv_path is required when json_path is not provided")
+
         experiment_specs, df = self.load_experiment_specs()
         for experiment_spec in experiment_specs:
             logger.info("Experiment spec: %s", experiment_spec)
@@ -96,7 +111,7 @@ class Runner:
             if not experiment_spec.pending_metrics:
                 continue
 
-            model = load_model(experiment_spec.model_name)
+            model = resolve_model(experiment_spec.model_name)
             # Create the metric instances with the backend that match the model backend
             pending_metrics = [
                 metric(model.backend) for metric in experiment_spec.pending_metrics
@@ -264,7 +279,170 @@ class Runner:
                     [nights_results[metric.name] for metric in nights_metrics],
                 )
 
+    def _execute_json(self) -> None:
+        if not self.json_path:
+            raise ValueError("json_path is required for JSON execution")
+        if not self.results_path:
+            raise ValueError("results_path is required for JSON execution")
+
+        results_store = ResultsStore(self.results_path)
+        experiments = JSONExperimentSource(self.json_path).load()
+        model_cache: dict[str, Any] = {}
+
+        for experiment in experiments:
+            logger.info("Resolved experiment: %s", experiment)
+            if not results_store.should_run(experiment):
+                continue
+
+            model = model_cache.get(experiment.model_name)
+            if model is None:
+                model = resolve_model(experiment.model_name)
+                model_cache[experiment.model_name] = model
+            results_store.mark_running(experiment)
+            try:
+                result = self._run_metric_experiment(experiment, model)
+            except Exception as exc:
+                results_store.mark_error(experiment, str(exc))
+                raise
+
+            results_store.mark_done(experiment, result)
+
+    def _run_metric_experiment(
+        self,
+        experiment: ResolvedExperiment,
+        model: Any,
+    ) -> Any:
+        metric_spec = get_metric_spec(experiment.metric_name)
+
+        if metric_spec.family == "visturing":
+            return self._run_visturing_metric(experiment, model)
+
+        metric = load_metric(experiment.metric_name)(model.backend)
+
+        if metric_spec.family == "saliency":
+            calculator = SaliencyMetricsCalculator(self.backend, [metric])
+            return calculator.run(model)[metric.name]
+
+        if metric_spec.family == "tid":
+            calculator = TIDMetricsCalculator(
+                self.backend,
+                metrics=[metric],
+                dataset_path=experiment.config.get("dataset_path"),
+            )
+            return calculator.run(model)[metric.name]
+
+        if metric_spec.family == "levels":
+            calculator = LevelsMetricsCalculator(
+                self.backend,
+                split=experiment.config.get("split", "between_class"),
+                metrics=[metric],
+                levels_path=experiment.config.get("levels_path"),
+                imagenet_path=experiment.config.get("imagenet_path"),
+            )
+            return calculator.run(model)[metric.name]
+
+        if metric_spec.family == "nights":
+            calculator = NightsMetricsCalculator(
+                self.backend,
+                metrics=[metric],
+                dataset_path=experiment.config.get("dataset_path"),
+            )
+            return calculator.run(model)[metric.name]
+
+        raise ValueError(f"Metric {experiment.metric_name} not supported")
+
+    def _run_visturing_metric(self, experiment: ResolvedExperiment, model: Any) -> Any:
+        config = experiment.config
+        metric_name = experiment.metric_name
+
+        if metric_name == "visturing_spectral_sensitivity":
+            calculator = create_prop1_calculator(
+                self.backend,
+                data_path=config.get("data_path"),
+                gt_path=config.get("gt_path"),
+                batch_size=config.get("batch_size", 32),
+            )
+        elif metric_name in {
+            "visturing_weber_law_pearson",
+            "visturing_weber_law_kendall",
+        }:
+            calculator = create_prop2_calculator(
+                self.backend,
+                channel=config.get("channel", "all"),
+                data_path=config.get("data_path"),
+                gt_path=config.get("gt_path"),
+                batch_size=config.get("batch_size", 32),
+                include_kendall=metric_name == "visturing_weber_law_kendall",
+            )
+        elif metric_name in {"visturing_csf_pearson", "visturing_csf_kendall"}:
+            calculator = create_prop3_4_calculator(
+                self.backend,
+                channel=config.get("channel", "all"),
+                data_path=config.get("data_path"),
+                gt_path=config.get("gt_path"),
+                batch_size=config.get("batch_size", 32),
+                include_kendall=metric_name == "visturing_csf_kendall",
+            )
+        elif metric_name in {
+            "visturing_campbell_blakemore_pearson",
+            "visturing_campbell_blakemore_kendall",
+        }:
+            calculator = create_prop5_calculator(
+                self.backend,
+                mask_freq=config.get("mask_freq", "all"),
+                data_path=config.get("data_path"),
+                gt_path=config.get("gt_path"),
+                batch_size=config.get("batch_size", 32),
+                include_kendall=metric_name == "visturing_campbell_blakemore_kendall",
+            )
+        elif metric_name in {
+            "visturing_contrast_curves_pearson",
+            "visturing_contrast_curves_kendall",
+        }:
+            calculator = create_prop6_7_calculator(
+                self.backend,
+                channel=config.get("channel", "all"),
+                freq=config.get("freq", "all"),
+                data_path=config.get("data_path"),
+                gt_path=config.get("gt_path"),
+                batch_size=config.get("batch_size", 32),
+                include_kendall=metric_name == "visturing_contrast_curves_kendall",
+            )
+        elif metric_name == "visturing_contrast_masking_kendall":
+            calculator = create_prop8_calculator(
+                self.backend,
+                freq=config.get("freq", "all"),
+                mask_contrast=config.get("mask_contrast", "0075"),
+                data_path=config.get("data_path"),
+                gt_path=config.get("gt_path"),
+                batch_size=config.get("batch_size", 32),
+            )
+        elif metric_name == "visturing_frequency_masking_kendall":
+            calculator = create_prop9_calculator(
+                self.backend,
+                freq=config.get("freq", "all"),
+                mask_freq=config.get("mask_freq", "1p5"),
+                data_path=config.get("data_path"),
+                gt_path=config.get("gt_path"),
+                batch_size=config.get("batch_size", 32),
+            )
+        elif metric_name == "visturing_orientation_masking_kendall":
+            calculator = create_prop10_calculator(
+                self.backend,
+                freq=config.get("freq", "all"),
+                mask_orientation=config.get("mask_orientation", "0"),
+                data_path=config.get("data_path"),
+                gt_path=config.get("gt_path"),
+                batch_size=config.get("batch_size", 32),
+            )
+        else:
+            raise ValueError(f"Metric {metric_name} not supported")
+
+        return calculator.run(model)[metric_name]
+
     def _load_csv(self) -> pd.DataFrame:
+        if not self.csv_path:
+            raise ValueError("csv_path is required for CSV execution")
         return pd.read_csv(self.csv_path)
 
     def _write_csv(self, df: pd.DataFrame) -> None:
