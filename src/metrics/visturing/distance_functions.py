@@ -48,8 +48,8 @@ def cosine_distance(features1: ArrayLike, features2: ArrayLike) -> ArrayLike:
 
     # Calcular similitud coseno
     dot_product = (feat1 * feat2).sum(axis=-1)
-    norm1 = np.sqrt((feat1 ** 2).sum(axis=-1))
-    norm2 = np.sqrt((feat2 ** 2).sum(axis=-1))
+    norm1 = np.sqrt((feat1**2).sum(axis=-1))
+    norm2 = np.sqrt((feat2**2).sum(axis=-1))
 
     cosine_sim = dot_product / (norm1 * norm2 + 1e-8)
 
@@ -78,7 +78,51 @@ def calculate_correlations(ground_truth: np.ndarray, experimental: np.ndarray) -
     }
 
 
-def calculate_spearman(experimental_curve: np.ndarray, ideal_ordering: list[int]) -> dict:
+def pearson_correlation_jax(vec1: np.ndarray, vec2: np.ndarray):
+    """Calcula Pearson con la misma formulacion usada por visturing JAX."""
+    import jax.numpy as jnp
+
+    vec1_jax = jnp.asarray(vec1).squeeze()
+    vec2_jax = jnp.asarray(vec2).squeeze()
+    vec1_mean = vec1_jax.mean()
+    vec2_mean = vec2_jax.mean()
+    num = vec1_jax - vec1_mean
+    num *= vec2_jax - vec2_mean
+    num = num.sum()
+    denom = ((vec1_jax - vec1_mean) ** 2).sum() ** 0.5
+    denom *= ((vec2_jax - vec2_mean) ** 2).sum() ** 0.5
+    return num / denom
+
+
+def kendall_correlation_jax(x: np.ndarray, y: np.ndarray):
+    """Calcula Kendall tau con la formulacion usada por visturing JAX."""
+    import jax.numpy as jnp
+
+    x_jax = jnp.asarray(x)
+    y_jax = jnp.asarray(y)
+    n = x_jax.shape[0]
+    diff_x = x_jax[:, None] - x_jax[None, :]
+    diff_y = y_jax[:, None] - y_jax[None, :]
+    soft_sign_x = jnp.tanh(diff_x / 0.1)
+    soft_sign_y = jnp.tanh(diff_y / 0.1)
+    concordance = soft_sign_x * soft_sign_y
+    return jnp.sum(concordance) / (n * (n - 1))
+
+
+def calculate_correlations_jax(
+    ground_truth: np.ndarray, experimental: np.ndarray
+) -> dict:
+    """Calcula correlaciones con la semantica del backend JAX de visturing."""
+    return {
+        "kendall": kendall_correlation_jax(
+            np.asarray(ground_truth).ravel(), np.asarray(experimental).ravel()
+        )
+    }
+
+
+def calculate_spearman(
+    experimental_curve: np.ndarray, ideal_ordering: list[int]
+) -> dict:
     """
     Calcula correlaciones de orden comparando con un ordenamiento ideal.
 
@@ -93,11 +137,22 @@ def calculate_spearman(experimental_curve: np.ndarray, ideal_ordering: list[int]
     ordered_curves = (-experimental_curve).argsort(axis=0)
 
     # Crear array ideal con la misma forma
-    ideal_ordering_array = (
-        np.array(ideal_ordering)[:, None].repeat(ordered_curves.shape[1], axis=1)
+    ideal_ordering_array = np.array(ideal_ordering)[:, None].repeat(
+        ordered_curves.shape[1], axis=1
     )
 
     return calculate_correlations(ordered_curves, ideal_ordering_array)
+
+
+def calculate_spearman_jax(
+    experimental_curve: np.ndarray, ideal_ordering: list[int]
+) -> dict:
+    """Calcula correlaciones de orden con la semantica del backend JAX."""
+    ordered_curves = (-experimental_curve).argsort(axis=0)
+    ideal_ordering_array = np.array(ideal_ordering)[:, None].repeat(
+        ordered_curves.shape[1], axis=1
+    )
+    return calculate_correlations_jax(ordered_curves, ideal_ordering_array)
 
 
 def calculate_correlations_with_ground_truth(
@@ -116,6 +171,15 @@ def calculate_correlations_with_ground_truth(
     gt_ordering = (-ground_truth).argsort(axis=0)
     e_ordering = (-experimental_curve).argsort(axis=0)
     return calculate_correlations(gt_ordering.ravel(), e_ordering.ravel())
+
+
+def calculate_correlations_with_ground_truth_jax(
+    experimental_curve: np.ndarray, ground_truth: np.ndarray
+) -> dict:
+    """Calcula correlaciones de orden con la semantica del backend JAX."""
+    gt_ordering = (-ground_truth).argsort(axis=0)
+    e_ordering = (-experimental_curve).argsort(axis=0)
+    return calculate_correlations_jax(gt_ordering.ravel(), e_ordering.ravel())
 
 
 def compare_ranges(x1: np.ndarray, x2: np.ndarray) -> bool:

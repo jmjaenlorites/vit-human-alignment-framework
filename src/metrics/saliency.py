@@ -83,16 +83,25 @@ class PearsonCorrelationCoefficient(BaseSaliencyMetric):
 
 
 class SaliencyMetricsCalculator(BaseMetricCalculator):
+    name: str = "SaliencyMetricsCalculator"
+
     def __init__(
-        self, backend: BackendEnum, metrics: Optional[list[BaseSaliencyMetric]] = None
+        self,
+        backend: BackendEnum,
+        metrics: Optional[list[BaseSaliencyMetric]] = None,
+        dataset_path: Optional[str] = None,
+        batch_size: int = 32,
+        num_workers: int = 2,
     ):
-        super().__init__("SaliencyMetricsCalculator")
         self._metrics: list[BaseSaliencyMetric] = metrics or [
             AUC_Judd(backend),
             PearsonCorrelationCoefficient(backend),
         ]
         self._backend = backend
         self._return_saliency = True
+        self._dataset_path = dataset_path
+        self._batch_size = batch_size
+        self._num_workers = num_workers
 
     def get_dataset_loader(
         self, transform: Optional[Callable[[Any], Any]] = None
@@ -101,7 +110,11 @@ class SaliencyMetricsCalculator(BaseMetricCalculator):
         match self._backend:
             case BackendEnum.TORCH:
                 return SaliencyMIT1003TorchDatasetLoader(
-                    batch_size=32, shuffle=False, num_workers=2, transform=transform
+                    batch_size=self._batch_size,
+                    shuffle=False,
+                    num_workers=self._num_workers,
+                    transform=transform,
+                    dataset_path=self._dataset_path,
                 )
             case BackendEnum.JAX:
                 raise ValueError(f"Backend {self._backend} not supported")

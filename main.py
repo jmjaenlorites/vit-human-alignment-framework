@@ -29,7 +29,7 @@ def main() -> None:
     setup_logging()
     try:
         runner = Runner(
-            json_path="data/experiments.example.json",
+            json_path="data/experiments.all-metrics.json",
             results_path="results.csv",
         )
         runner.execute()

@@ -55,14 +55,14 @@ class Runner:
         Current CSV format only supports metric names in columns (e.g., metric_tid_spearman_mos).
         This limits configuration options for metrics like:
         - Levels: Can't specify split (uses default "between_class")
-        - Visturing: Can't specify channel, frequency, mask parameters (uses Prop1 default)
+        - Visturing: Can't specify frequency/mask parameters per metric in CSV
 
         Future JSON format will allow:
         {
             "model_name": "vit_b16",
             "metrics": [
                 {"name": "levels_triplet_accuracy", "config": {"split": "class_border"}},
-                {"name": "visturing_weber_law", "config": {"channel": "red_green"}},
+                {"name": "visturing_frequency_masking_kendall", "config": {"mask_freq": "3"}},
                 ...
             ]
         }
@@ -320,7 +320,12 @@ class Runner:
         metric = load_metric(experiment.metric_name)(model.backend)
 
         if metric_spec.family == "saliency":
-            calculator = SaliencyMetricsCalculator(self.backend, [metric])
+            calculator = SaliencyMetricsCalculator(
+                self.backend,
+                [metric],
+                dataset_path=experiment.config.get("dataset_path"),
+                batch_size=experiment.config.get("batch_size", 32),
+            )
             return calculator.run(model)[metric.name]
 
         if metric_spec.family == "tid":

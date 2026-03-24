@@ -16,6 +16,13 @@ class SaliencyMIT1003DatasetLoader(BaseSaliencyDatasetLoader):
         "../ViT-saliency-alignment/FixaTons_repo/Datasets/MIT1003/"
     )
 
+    def __init__(self, dataset_path: Optional[str] = None):
+        self.dataset_path = dataset_path or os.environ.get(
+            "SALIENCY_DATASET_PATH",
+            os.environ.get("MIT1003_DATASET_PATH", self.DATASET_PATH),
+        )
+        super().__init__(name="SaliencyMIT1003")
+
     def get_paths(self) -> dict[str, list[str]]:
         """
         Obtiene los paths emparejados de stimulus, saliency y fixation maps.
@@ -23,9 +30,9 @@ class SaliencyMIT1003DatasetLoader(BaseSaliencyDatasetLoader):
         IMPORTANTE: Los archivos deben estar ordenados y emparejados por nombre base,
         ya que los nombres pueden tener extensiones diferentes entre carpetas.
         """
-        stimuli_dir = os.path.join(self.DATASET_PATH, "STIMULI")
-        saliency_dir = os.path.join(self.DATASET_PATH, "SALIENCY_MAPS")
-        fixation_dir = os.path.join(self.DATASET_PATH, "FIXATION_MAPS")
+        stimuli_dir = os.path.join(self.dataset_path, "STIMULI")
+        saliency_dir = os.path.join(self.dataset_path, "SALIENCY_MAPS")
+        fixation_dir = os.path.join(self.dataset_path, "FIXATION_MAPS")
 
         # Obtener todos los stimulus files y ordenarlos
         stimulus_files = sorted(
@@ -131,13 +138,16 @@ class SaliencyMIT1003TorchDatasetLoader(
         shuffle: bool,
         num_workers: int,
         transform: Optional[Callable[[Any], Any]] = None,
+        dataset_path: Optional[str] = None,
     ):
-        super().__init__(
+        BaseTorchDatasetLoader.__init__(
+            self,
             name="SaliencyMIT1003Torch",
             batch_size=batch_size,
             shuffle=shuffle,
             num_workers=num_workers,
         )
+        SaliencyMIT1003DatasetLoader.__init__(self, dataset_path=dataset_path)
         self.transform = transform
 
     def get_dataset(self, transform: Optional[Callable[[Any], Any]] = None) -> Dataset:

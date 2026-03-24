@@ -1,0 +1,17 @@
+{
+    "timm__vit_huge_patch14_clip_224.laion2b": {
+        "model_name": "vit-h14",
+        "metric_saliency_auc_judd": [1,2,3,4,5,6,7,8,9,10],
+        "metric_saliency_pearson_correlation_coefficient": [1,2,3,4,5,6,7,8,9,10]
+    },
+    "hf__vit_huge_patch14_clip_224.laion2b": {
+        "model_name": "vit-h14",
+        "metric_saliency_auc_judd": [1,2,3,4,5,6,7,8,9,10],
+        "metric_saliency_pearson_correlation_coefficient": [1,2,3,4,5,6,7,8,9,10]
+    }
+    {
+        "model_name": "vit-h14",
+        "metric_saliency_auc_judd": [1,2,3,4,5,6,7,8,9,10],
+        "metric_saliency_pearson_correlation_coefficient": [1,2,3,4,5,6,7,8,9,10]
+    }
+}

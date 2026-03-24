@@ -3,7 +3,6 @@
 import os
 
 import pytest
-
 from src.metrics.visturing import (
     create_prop1_calculator,
     create_prop2_calculator,

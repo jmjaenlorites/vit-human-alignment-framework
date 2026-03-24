@@ -8,12 +8,31 @@ import numpy as np
 from .base import BaseVisTuringMetric, VisTuringCalculator
 from .distance_functions import (
     calculate_correlations_with_ground_truth,
+    calculate_correlations_with_ground_truth_jax,
     calculate_pearson_stack,
+    pearson_correlation_jax,
     prepare_data,
 )
 from .ground_truth import load_ground_truth_file
 from ...dataset_loaders.visturing.prop5 import Prop5TorchDatasetLoader
 from ...utils.common_enums import BackendEnum
+
+
+def _prepare_prop5_diffs(
+    diffs: dict[str, np.ndarray], backend: BackendEnum
+) -> dict[str, np.ndarray]:
+    diffs_copy = {k: np.asarray(v) for k, v in diffs.items()}
+    diffs_a = diffs_copy.pop("a")
+
+    if backend == BackendEnum.JAX:
+        diffs_inv = {k: diffs_a / (v + 1e-6) for k, v in diffs_copy.items()}
+        diffs_inv = {k: (v - 1.0) for k, v in diffs_inv.items()}
+        return {k: v / v.max() for k, v in diffs_inv.items()}
+
+    diffs_inv = {k: (diffs_a + 1e-6) / v for k, v in diffs_copy.items()}
+    diffs_inv = {k: (v - 1.0) for k, v in diffs_inv.items()}
+    diffs_inv = {k: np.clip(v, a_min=1e-6, a_max=np.inf) for k, v in diffs_inv.items()}
+    return {k: v / v.max() for k, v in diffs_inv.items()}
 
 
 class CampbellBlakemorePearson(BaseVisTuringMetric):
@@ -118,13 +137,7 @@ class CampbellBlakemorePearson(BaseVisTuringMetric):
                 correlations_per_layer.append(float("nan"))
                 continue
 
-            diffs_a = diffs.pop("a")
-            diffs_inv = {k: (diffs_a + 1e-6) / v for k, v in diffs.items()}
-            diffs_inv = {k: (v - 1.0) for k, v in diffs_inv.items()}
-            diffs_inv = {
-                k: np.clip(v, a_min=1e-6, a_max=np.inf) for k, v in diffs_inv.items()
-            }
-            diffs_inv = {k: v / v.max() for k, v in diffs_inv.items()}
+            diffs_inv = _prepare_prop5_diffs(diffs, self._backend)
 
             if not diffs_inv:
                 correlations_per_layer.append(float("nan"))
@@ -147,7 +160,12 @@ class CampbellBlakemorePearson(BaseVisTuringMetric):
             _, _, _, d3 = prepare_data(self.freqs[1:], diffs_inv["12"][1:], gt_x, y3_gt)
             ds = np.stack([d1, d2, d3])
 
-            pearson_corr = float(calculate_pearson_stack(diffs_stack, ds)[0])
+            if self._backend == BackendEnum.JAX:
+                pearson_corr = float(
+                    pearson_correlation_jax(diffs_stack.ravel(), ds.ravel())
+                )
+            else:
+                pearson_corr = float(calculate_pearson_stack(diffs_stack, ds)[0])
             correlations_per_layer.append(pearson_corr)
 
         return {self.name: json.dumps(correlations_per_layer)}
@@ -245,13 +263,7 @@ class CampbellBlakemoreKendall(BaseVisTuringMetric):
                 results_per_layer.append({})
                 continue
 
-            diffs_a = diffs.pop("a")
-            diffs_inv = {k: (diffs_a + 1e-6) / v for k, v in diffs.items()}
-            diffs_inv = {k: (v - 1.0) for k, v in diffs_inv.items()}
-            diffs_inv = {
-                k: np.clip(v, a_min=1e-6, a_max=np.inf) for k, v in diffs_inv.items()
-            }
-            diffs_inv = {k: v / v.max() for k, v in diffs_inv.items()}
+            diffs_inv = _prepare_prop5_diffs(diffs, self._backend)
 
             if not diffs_inv:
                 results_per_layer.append({})
@@ -274,13 +286,23 @@ class CampbellBlakemoreKendall(BaseVisTuringMetric):
             _, _, _, d3 = prepare_data(self.freqs[1:], diffs_inv["12"][1:], gt_x, y3_gt)
             ds = np.stack([d1, d2, d3])
 
-            correlations = calculate_correlations_with_ground_truth(diffs_stack, ds)
-            results_per_layer.append(
-                {
-                    "kendall": float(correlations["kendall"]),
-                    "spearman": float(correlations["spearman"]),
-                }
-            )
+            if self._backend == BackendEnum.JAX:
+                correlations = calculate_correlations_with_ground_truth_jax(
+                    diffs_stack, ds
+                )
+                results_per_layer.append(
+                    {
+                        "kendall": float(correlations["kendall"]),
+                    }
+                )
+            else:
+                correlations = calculate_correlations_with_ground_truth(diffs_stack, ds)
+                results_per_layer.append(
+                    {
+                        "kendall": float(correlations["kendall"]),
+                        "spearman": float(correlations["spearman"]),
+                    }
+                )
 
         return {self.name: json.dumps(results_per_layer)}
 

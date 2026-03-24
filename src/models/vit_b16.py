@@ -5,6 +5,7 @@ import timm
 import torch
 
 from ..models.base import BaseModelAdapter
+from ..models.checkpoint_cache import get_checkpoint_cache_dir
 from ..utils.common_enums import BackendEnum
 from ..utils.common_types import ArrayLike
 
@@ -35,7 +36,11 @@ class TimmViTAdapter(BaseModelAdapter):
         self._EPS = 1e-8
 
     def _load_model(self, config: dict[str, Any]) -> Any:
-        model = timm.create_model(self.MODEL_NAME, pretrained=True)
+        model = timm.create_model(
+            self.MODEL_NAME,
+            pretrained=True,
+            cache_dir=get_checkpoint_cache_dir(),
+        )
         model.eval()
         return model.to(self.device)
 

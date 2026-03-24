@@ -7,7 +7,12 @@ import numpy as np
 from scipy.stats import pearsonr
 
 from .base import BaseVisTuringMetric, VisTuringCalculator
-from .distance_functions import calculate_spearman, prepare_data
+from .distance_functions import (
+    calculate_spearman,
+    calculate_spearman_jax,
+    pearson_correlation_jax,
+    prepare_data,
+)
 from .ground_truth import load_ground_truth_file
 from ...dataset_loaders.visturing.prop2 import Prop2TorchDatasetLoader
 from ...utils.common_enums import BackendEnum
@@ -73,11 +78,17 @@ class WeberLawPearson(BaseVisTuringMetric):
             raise ValueError("Prop2 requires batch metadata (channel, level_idx)")
         channels = batch[2]
         level_idxs = batch[3]
+        sample_idxs = batch[4] if len(batch) > 4 else None
+        bg_idxs = batch[5] if len(batch) > 5 else None
 
         if hasattr(channels, "tolist"):
             channels = channels.tolist()
         if hasattr(level_idxs, "tolist"):
             level_idxs = level_idxs.tolist()
+        if sample_idxs is not None and hasattr(sample_idxs, "tolist"):
+            sample_idxs = sample_idxs.tolist()
+        if bg_idxs is not None and hasattr(bg_idxs, "tolist"):
+            bg_idxs = bg_idxs.tolist()
 
         num_layers = len(features_test)
         if not self._diffs_per_layer:
@@ -103,9 +114,17 @@ class WeberLawPearson(BaseVisTuringMetric):
                 raise NotImplementedError(f"Backend {self._backend} not supported")
 
             for idx, (ch, level_idx) in enumerate(zip(channels, level_idxs)):
-                self._diffs_per_layer[layer_idx][ch][int(level_idx)].append(
-                    float(diffs[idx])
-                )
+                diff_value = float(diffs[idx])
+                if (
+                    self._backend == BackendEnum.TORCH
+                    and ch != "achrom"
+                    and sample_idxs is not None
+                    and bg_idxs is not None
+                ):
+                    sample_idx = int(sample_idxs[idx])
+                    bg_idx = int(bg_idxs[idx])
+                    diff_value *= -1.0 if sample_idx < bg_idx else 1.0
+                self._diffs_per_layer[layer_idx][ch][int(level_idx)].append(diff_value)
 
     def finalize(self) -> dict[str, Any]:
         results_per_layer = []
@@ -152,18 +171,17 @@ class WeberLawPearson(BaseVisTuringMetric):
             _, b_rg, _, d_rg = prepare_data(x_rg, diffs_rg, gt_rg["x"], gt_rg["y"])
             _, b_yb, _, d_yb = prepare_data(x_yb, diffs_yb, gt_yb["x"], gt_yb["y"])
 
-            corr_achrom = float(
-                pearsonr(
-                    np.concatenate([b_a[0].ravel()]),
-                    np.concatenate([d_a.ravel()]),
-                )[0]
-            )
-            corr_chrom = float(
-                pearsonr(
-                    np.concatenate([b_rg[2].ravel(), b_yb[2].ravel()]),
-                    np.concatenate([d_rg.ravel(), d_yb.ravel()]),
-                )[0]
-            )
+            achrom_x = np.concatenate([b_a[0].ravel()])
+            achrom_y = np.concatenate([d_a.ravel()])
+            chrom_x = np.concatenate([b_rg[2].ravel(), b_yb[2].ravel()])
+            chrom_y = np.concatenate([d_rg.ravel(), d_yb.ravel()])
+
+            if self._backend == BackendEnum.JAX:
+                corr_achrom = float(pearson_correlation_jax(achrom_x, achrom_y))
+                corr_chrom = float(pearson_correlation_jax(chrom_x, chrom_y))
+            else:
+                corr_achrom = float(pearsonr(achrom_x, achrom_y)[0])
+                corr_chrom = float(pearsonr(chrom_x, chrom_y)[0])
 
             results_per_layer.append(
                 {
@@ -234,11 +252,17 @@ class WeberLawKendall(BaseVisTuringMetric):
             raise ValueError("Prop2 requires batch metadata (channel, level_idx)")
         channels = batch[2]
         level_idxs = batch[3]
+        sample_idxs = batch[4] if len(batch) > 4 else None
+        bg_idxs = batch[5] if len(batch) > 5 else None
 
         if hasattr(channels, "tolist"):
             channels = channels.tolist()
         if hasattr(level_idxs, "tolist"):
             level_idxs = level_idxs.tolist()
+        if sample_idxs is not None and hasattr(sample_idxs, "tolist"):
+            sample_idxs = sample_idxs.tolist()
+        if bg_idxs is not None and hasattr(bg_idxs, "tolist"):
+            bg_idxs = bg_idxs.tolist()
 
         num_layers = len(features_test)
         if not self._diffs_per_layer:
@@ -264,9 +288,17 @@ class WeberLawKendall(BaseVisTuringMetric):
                 raise NotImplementedError(f"Backend {self._backend} not supported")
 
             for idx, (ch, level_idx) in enumerate(zip(channels, level_idxs)):
-                self._diffs_per_layer[layer_idx][ch][int(level_idx)].append(
-                    float(diffs[idx])
-                )
+                diff_value = float(diffs[idx])
+                if (
+                    self._backend == BackendEnum.TORCH
+                    and ch != "achrom"
+                    and sample_idxs is not None
+                    and bg_idxs is not None
+                ):
+                    sample_idx = int(sample_idxs[idx])
+                    bg_idx = int(bg_idxs[idx])
+                    diff_value *= -1.0 if sample_idx < bg_idx else 1.0
+                self._diffs_per_layer[layer_idx][ch][int(level_idx)].append(diff_value)
 
     def finalize(self) -> dict[str, Any]:
         results_per_layer = []
@@ -284,12 +316,20 @@ class WeberLawKendall(BaseVisTuringMetric):
                 diffs_channel = np.stack([np.array(v) for v in layer_diffs[ch]])
                 gt = self.ground_truth_data[ch]
                 _, b, _, _ = prepare_data(x_vals, diffs_channel, gt["x"], gt["y"])
-                correlations = calculate_spearman(b, ideal_ordering=[0, 1, 2, 3, 4])
-                layer_result[ch] = {
-                    "spearman": float(correlations["spearman"]),
-                    "kendall": float(correlations["kendall"]),
-                    "pearson": float(correlations["pearson"]),
-                }
+                if self._backend == BackendEnum.JAX:
+                    correlations = calculate_spearman_jax(
+                        b, ideal_ordering=[0, 1, 2, 3, 4]
+                    )
+                    layer_result[ch] = {
+                        "kendall": float(correlations["kendall"]),
+                    }
+                else:
+                    correlations = calculate_spearman(b, ideal_ordering=[0, 1, 2, 3, 4])
+                    layer_result[ch] = {
+                        "spearman": float(correlations["spearman"]),
+                        "kendall": float(correlations["kendall"]),
+                        "pearson": float(correlations["pearson"]),
+                    }
             results_per_layer.append(layer_result)
 
         return {self.name: json.dumps(results_per_layer)}
@@ -324,6 +364,7 @@ def create_prop2_calculator(
         shuffle=False,
         num_workers=2,
         data_path=data_path,
+        use_torch_upstream_semantics=backend == BackendEnum.TORCH,
     )
 
     # Cargar datos para obtener x_values

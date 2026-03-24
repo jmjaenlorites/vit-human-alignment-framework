@@ -1,0 +1,124 @@
+{
+  "defaults": {},
+  "dataset_defaults": {
+    "levels": {
+      "batch_size": 8,
+      "levels_path": "tests/data/levels",
+      "imagenet_path": "tests/data/levels/images"
+    },
+    "visturing": {
+      "batch_size": 8,
+      "data_path": "tests/data/visturing",
+      "gt_path": "tests/data/visturing"
+    },
+    "tid": {
+      "batch_size": 8,
+      "dataset_path": "tests/data/tid"
+    },
+    "nights": {
+      "batch_size": 8,
+      "dataset_path": "tests/data/nights"
+    },
+    "saliency": {}
+  },
+  "models": [
+    "timm::vit_base_patch16_224"
+  ],
+  "experiments": [
+    {
+      "experiment_id": "saliency-auc-judd",
+      "metric": "saliency_auc_judd"
+    },
+    {
+      "experiment_id": "saliency-pearson-correlation-coefficient",
+      "metric": "saliency_pearson_correlation_coefficient"
+    },
+    {
+      "experiment_id": "tid-spearman-mos",
+      "metric": "tid_spearman_mos"
+    },
+    {
+      "experiment_id": "nights-preference-accuracy",
+      "metric": "nights_preference_accuracy"
+    },
+    {
+      "experiment_id": "levels-between-class",
+      "metric": "levels_triplet_accuracy",
+      "config": {
+        "split": "between_class"
+      }
+    },
+    {
+      "experiment_id": "visturing-spectral-sensitivity",
+      "metric": "visturing_spectral_sensitivity"
+    },
+    {
+      "experiment_id": "visturing-weber-law-pearson",
+      "metric": "visturing_weber_law_pearson"
+    },
+    {
+      "experiment_id": "visturing-weber-law-kendall",
+      "metric": "visturing_weber_law_kendall"
+    },
+    {
+      "experiment_id": "visturing-csf-pearson",
+      "metric": "visturing_csf_pearson"
+    },
+    {
+      "experiment_id": "visturing-csf-kendall",
+      "metric": "visturing_csf_kendall"
+    },
+    {
+      "experiment_id": "visturing-campbell-blakemore-pearson",
+      "metric": "visturing_campbell_blakemore_pearson",
+      "config": {
+        "mask_freq": "all"
+      }
+    },
+    {
+      "experiment_id": "visturing-campbell-blakemore-kendall",
+      "metric": "visturing_campbell_blakemore_kendall",
+      "config": {
+        "mask_freq": "all"
+      }
+    },
+    {
+      "experiment_id": "visturing-contrast-curves-pearson",
+      "metric": "visturing_contrast_curves_pearson",
+      "config": {
+        "freq": "all"
+      }
+    },
+    {
+      "experiment_id": "visturing-contrast-curves-kendall",
+      "metric": "visturing_contrast_curves_kendall",
+      "config": {
+        "freq": "all"
+      }
+    },
+    {
+      "experiment_id": "visturing-contrast-masking-kendall",
+      "metric": "visturing_contrast_masking_kendall",
+      "config": {
+        "freq": "all",
+        "mask_contrast": "0075"
+      }
+    },
+    {
+      "experiment_id": "visturing-frequency-masking-kendall",
+      "metric": "visturing_frequency_masking_kendall",
+      "config": {
+        "freq": "all",
+        "mask_freq": "1p5"
+      }
+    },
+    {
+      "experiment_id": "visturing-orientation-masking-kendall",
+      "metric": "visturing_orientation_masking_kendall",
+      "config": {
+        "freq": "all",
+        "mask_orientation": "0"
+      }
+    }
+  ]
+}

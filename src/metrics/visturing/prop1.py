@@ -7,6 +7,7 @@ import numpy as np
 from scipy.stats import pearsonr
 
 from .base import BaseVisTuringMetric, VisTuringCalculator
+from .distance_functions import pearson_correlation_jax
 from .ground_truth import load_ground_truth_file
 from ...dataset_loaders.visturing.prop1 import Prop1TorchDatasetLoader
 from ...utils.common_enums import BackendEnum
@@ -19,7 +20,7 @@ class SpectralSensitivityPearson(BaseVisTuringMetric):
 
     Esta métrica evalúa si el modelo replica la sensibilidad espectral
     del sistema visual humano a diferentes longitudes de onda.
-    
+
     Note: When instantiated from CSV (without parameters), uses default configuration.
     Future JSON-based configuration will allow specifying custom gt_path and other parameters.
     """
@@ -97,7 +98,11 @@ class SpectralSensitivityPearson(BaseVisTuringMetric):
                 a_interp = np.interp(self.lambdas, x_gt, a_gt)
 
                 # Calcular correlación
-                corr, p_value = pearsonr(diffs_array, a_interp)
+                if self._backend == BackendEnum.JAX:
+                    corr = float(pearson_correlation_jax(diffs_array, a_interp))
+                    p_value = float("nan")
+                else:
+                    corr, p_value = pearsonr(diffs_array, a_interp)
 
                 correlations_per_layer.append(float(corr))
                 p_values_per_layer.append(float(p_value))
@@ -142,7 +147,9 @@ def create_prop1_calculator(
     _, _, lambdas = dataset_loader.load_data()
 
     # Crear métrica
-    metric = SpectralSensitivityPearson(backend=backend, gt_path=gt_path, lambdas=lambdas)
+    metric = SpectralSensitivityPearson(
+        backend=backend, gt_path=gt_path, lambdas=lambdas
+    )
 
     # Crear calculator
     calculator = VisTuringCalculator(

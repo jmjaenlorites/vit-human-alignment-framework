@@ -9,6 +9,8 @@ from scipy.stats import pearsonr
 from .base import BaseVisTuringMetric, VisTuringCalculator
 from .distance_functions import (
     calculate_correlations_with_ground_truth,
+    calculate_correlations_with_ground_truth_jax,
+    pearson_correlation_jax,
     prepare_data,
 )
 from .ground_truth import load_ground_truth_file
@@ -129,7 +131,10 @@ class CSFPearson(BaseVisTuringMetric):
 
             b = np.array(bs)
             d = np.array(ds)
-            corr = float(pearsonr(b.ravel(), d.ravel())[0])
+            if self._backend == BackendEnum.JAX:
+                corr = float(pearson_correlation_jax(b.ravel(), d.ravel()))
+            else:
+                corr = float(pearsonr(b.ravel(), d.ravel())[0])
             correlations_per_layer.append(corr)
 
         return {self.name: json.dumps(correlations_per_layer)}
@@ -247,14 +252,22 @@ class CSFKendall(BaseVisTuringMetric):
 
             b = np.array(bs)
             d = np.array(ds)
-            correlations = calculate_correlations_with_ground_truth(b, d)
-            results_per_layer.append(
-                {
-                    "kendall": float(correlations["kendall"]),
-                    "spearman": float(correlations["spearman"]),
-                    "pearson": float(correlations["pearson"]),
-                }
-            )
+            if self._backend == BackendEnum.JAX:
+                correlations = calculate_correlations_with_ground_truth_jax(b, d)
+                results_per_layer.append(
+                    {
+                        "kendall": float(correlations["kendall"]),
+                    }
+                )
+            else:
+                correlations = calculate_correlations_with_ground_truth(b, d)
+                results_per_layer.append(
+                    {
+                        "kendall": float(correlations["kendall"]),
+                        "spearman": float(correlations["spearman"]),
+                        "pearson": float(correlations["pearson"]),
+                    }
+                )
 
         return {self.name: json.dumps(results_per_layer)}
 

@@ -79,9 +79,8 @@ def test_json_source_merges_dataset_defaults_by_metric_family(tmp_path) -> None:
                         "config": {"split": "within_class"},
                     },
                     {
-                        "experiment_id": "visturing-csf-rg",
+                        "experiment_id": "visturing-csf",
                         "metric": "visturing_csf_pearson",
-                        "config": {"channel": "red_green"},
                     },
                 ],
             }
@@ -99,7 +98,7 @@ def test_json_source_merges_dataset_defaults_by_metric_family(tmp_path) -> None:
     visturing_experiment = next(
         experiment
         for experiment in experiments
-        if experiment.experiment_id == "visturing-csf-rg"
+        if experiment.experiment_id == "visturing-csf"
     )
 
     assert levels_experiment.config == {
@@ -112,7 +111,37 @@ def test_json_source_merges_dataset_defaults_by_metric_family(tmp_path) -> None:
         "batch_size": 16,
         "data_path": "/tmp/visturing",
         "gt_path": "/tmp/visturing-gt",
-        "channel": "red_green",
+    }
+
+
+def test_json_source_merges_saliency_dataset_defaults(tmp_path) -> None:
+    config_path = tmp_path / "experiments.json"
+    config_path.write_text(
+        json.dumps(
+            {
+                "dataset_defaults": {
+                    "saliency": {
+                        "dataset_path": "/tmp/mit1003",
+                        "batch_size": 4,
+                    }
+                },
+                "models": ["vit-b16"],
+                "experiments": [
+                    {
+                        "experiment_id": "saliency-auc",
+                        "metric": "saliency_auc_judd",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    experiments = JSONExperimentSource(str(config_path)).load()
+
+    assert experiments[0].config == {
+        "dataset_path": "/tmp/mit1003",
+        "batch_size": 4,
     }
 
 
@@ -174,7 +203,7 @@ def test_json_source_generates_stable_config_hash_for_equivalent_dict_order(
                         "experiment_id": "visturing-csf",
                         "metric": "visturing_csf_pearson",
                         "config": {
-                            "channel": "red_green",
+                            "batch_size": 4,
                             "data_path": "/tmp/visturing",
                         },
                     },
@@ -183,7 +212,7 @@ def test_json_source_generates_stable_config_hash_for_equivalent_dict_order(
                         "metric": "visturing_csf_pearson",
                         "config": {
                             "data_path": "/tmp/visturing",
-                            "channel": "red_green",
+                            "batch_size": 4,
                         },
                     },
                 ],
@@ -318,7 +347,7 @@ def test_json_source_rejects_unknown_levels_config_key(tmp_path) -> None:
         JSONExperimentSource(str(config_path)).load()
 
 
-def test_json_source_rejects_invalid_visturing_channel(tmp_path) -> None:
+def test_json_source_rejects_channel_for_csf_metric(tmp_path) -> None:
     config_path = tmp_path / "experiments.json"
     config_path.write_text(
         json.dumps(
@@ -328,7 +357,7 @@ def test_json_source_rejects_invalid_visturing_channel(tmp_path) -> None:
                     {
                         "experiment_id": "visturing-invalid-channel",
                         "metric": "visturing_csf_pearson",
-                        "config": {"channel": "banana"},
+                        "config": {"channel": "red_green"},
                     }
                 ],
             }
@@ -336,7 +365,7 @@ def test_json_source_rejects_invalid_visturing_channel(tmp_path) -> None:
         encoding="utf-8",
     )
 
-    with pytest.raises(ValueError, match="Valid options:.*red_green"):
+    with pytest.raises(ValueError, match="Allowed keys:.*batch_size"):
         JSONExperimentSource(str(config_path)).load()
 
 

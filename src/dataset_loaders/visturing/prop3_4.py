@@ -142,8 +142,20 @@ class Prop3_4TorchDatasetLoader(BaseVisTuringTorchDatasetLoader, Prop3_4DatasetL
         # Guardar frecuencias como atributo para la métrica
         self.freqs = freqs
 
+        def canonical_channel(channel: str) -> str:
+            channel_map = {
+                "red_green": "rg",
+                "yellow_blue": "yb",
+            }
+            return channel_map.get(channel, channel)
+
         def resolve_channel_key(channel: str) -> str:
-            return "a" if channel == "achrom" else channel
+            channel_map = {
+                "achrom": "a",
+                "red_green": "rg",
+                "yellow_blue": "yb",
+            }
+            return channel_map.get(channel, channel)
 
         if self.channel == "all":
             samples = []
@@ -161,7 +173,7 @@ class Prop3_4TorchDatasetLoader(BaseVisTuringTorchDatasetLoader, Prop3_4DatasetL
             )
 
         return Prop3_4Dataset(
-            channel=self.channel,
+            channel=canonical_channel(self.channel),
             noise_patterns=noises[resolve_channel_key(self.channel)],
             background=background,
             transform=self.transform,

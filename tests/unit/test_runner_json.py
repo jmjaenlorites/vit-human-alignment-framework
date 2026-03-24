@@ -138,7 +138,6 @@ def test_run_metric_experiment_passes_visturing_configuration(monkeypatch) -> No
         metric_name="visturing_csf_pearson",
         model_name="vit-b16",
         config={
-            "channel": "red_green",
             "data_path": "/tmp/visturing",
             "gt_path": "/tmp/visturing-gt",
             "batch_size": 8,
@@ -171,12 +170,60 @@ def test_run_metric_experiment_passes_visturing_configuration(monkeypatch) -> No
     assert result == "[0.7]"
     assert captured_kwargs == {
         "backend": runner.backend,
-        "channel": "red_green",
+        "channel": "all",
         "data_path": "/tmp/visturing",
         "gt_path": "/tmp/visturing-gt",
         "batch_size": 8,
         "include_kendall": False,
     }
+
+
+def test_run_metric_experiment_passes_saliency_configuration(monkeypatch) -> None:
+    runner = Runner(json_path="experiments.json", results_path="results.csv")
+    model = SimpleNamespace(backend=runner.backend, transform=lambda batch: batch)
+    experiment = ResolvedExperiment.from_parts(
+        experiment_id="saliency-auc",
+        metric_name="saliency_auc_judd",
+        model_name="vit-b16",
+        config={
+            "dataset_path": "/tmp/mit1003",
+            "batch_size": 4,
+        },
+    )
+    captured_kwargs = {}
+
+    class FakeMetric:
+        name = "saliency_auc_judd"
+
+    class FakeSaliencyCalculator:
+        def __init__(self, backend, metrics, dataset_path, batch_size):
+            captured_kwargs.update(
+                {
+                    "backend": backend,
+                    "metrics": metrics,
+                    "dataset_path": dataset_path,
+                    "batch_size": batch_size,
+                }
+            )
+
+        def run(self, loaded_model):
+            assert loaded_model is model
+            return {"saliency_auc_judd": "[0.8]"}
+
+    monkeypatch.setattr(
+        "src.runner.base.load_metric", lambda metric_name: lambda backend: FakeMetric()
+    )
+    monkeypatch.setattr(
+        "src.runner.base.SaliencyMetricsCalculator", FakeSaliencyCalculator
+    )
+
+    result = runner._run_metric_experiment(experiment, model)
+
+    assert result == "[0.8]"
+    assert captured_kwargs["backend"] == runner.backend
+    assert captured_kwargs["dataset_path"] == "/tmp/mit1003"
+    assert captured_kwargs["batch_size"] == 4
+    assert captured_kwargs["metrics"][0].name == "saliency_auc_judd"
 
 
 def test_run_metric_experiment_does_not_instantiate_visturing_metric_directly(

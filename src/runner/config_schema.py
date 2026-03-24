@@ -9,15 +9,6 @@ class MetricSpec:
 
 
 LEVELS_SPLITS = {"between_class", "class_border", "within_class"}
-VISTURING_CHANNELS = {
-    "all",
-    "achrom",
-    "a",
-    "red_green",
-    "rg",
-    "yellow_blue",
-    "yb",
-}
 CONTRAST_CURVES_FREQS = {"all", "1p5", "3", "6", "12", "24"}
 MASK_FREQS = {"all", "1p5", "3", "6", "12", "24"}
 MASK_CONTRASTS = {"0075", "0150", "0225", "0300"}
@@ -28,8 +19,14 @@ DATASET_DEFAULT_GROUPS = {"levels", "visturing", "tid", "nights", "saliency"}
 
 
 METRIC_SPECS: dict[str, MetricSpec] = {
-    "saliency_auc_judd": MetricSpec(family="saliency"),
-    "saliency_pearson_correlation_coefficient": MetricSpec(family="saliency"),
+    "saliency_auc_judd": MetricSpec(
+        family="saliency",
+        allowed_keys={"dataset_path", "batch_size"},
+    ),
+    "saliency_pearson_correlation_coefficient": MetricSpec(
+        family="saliency",
+        allowed_keys={"dataset_path", "batch_size"},
+    ),
     "tid_spearman_mos": MetricSpec(
         family="tid",
         allowed_keys={"dataset_path", "batch_size"},
@@ -49,23 +46,19 @@ METRIC_SPECS: dict[str, MetricSpec] = {
     ),
     "visturing_weber_law_pearson": MetricSpec(
         family="visturing",
-        allowed_keys={"channel", "data_path", "gt_path", "batch_size"},
-        value_options={"channel": VISTURING_CHANNELS},
+        allowed_keys={"data_path", "gt_path", "batch_size"},
     ),
     "visturing_weber_law_kendall": MetricSpec(
         family="visturing",
-        allowed_keys={"channel", "data_path", "gt_path", "batch_size"},
-        value_options={"channel": VISTURING_CHANNELS},
+        allowed_keys={"data_path", "gt_path", "batch_size"},
     ),
     "visturing_csf_pearson": MetricSpec(
         family="visturing",
-        allowed_keys={"channel", "data_path", "gt_path", "batch_size"},
-        value_options={"channel": VISTURING_CHANNELS},
+        allowed_keys={"data_path", "gt_path", "batch_size"},
     ),
     "visturing_csf_kendall": MetricSpec(
         family="visturing",
-        allowed_keys={"channel", "data_path", "gt_path", "batch_size"},
-        value_options={"channel": VISTURING_CHANNELS},
+        allowed_keys={"data_path", "gt_path", "batch_size"},
     ),
     "visturing_campbell_blakemore_pearson": MetricSpec(
         family="visturing",
@@ -79,13 +72,13 @@ METRIC_SPECS: dict[str, MetricSpec] = {
     ),
     "visturing_contrast_curves_pearson": MetricSpec(
         family="visturing",
-        allowed_keys={"channel", "freq", "data_path", "gt_path", "batch_size"},
-        value_options={"channel": VISTURING_CHANNELS, "freq": CONTRAST_CURVES_FREQS},
+        allowed_keys={"freq", "data_path", "gt_path", "batch_size"},
+        value_options={"freq": CONTRAST_CURVES_FREQS},
     ),
     "visturing_contrast_curves_kendall": MetricSpec(
         family="visturing",
-        allowed_keys={"channel", "freq", "data_path", "gt_path", "batch_size"},
-        value_options={"channel": VISTURING_CHANNELS, "freq": CONTRAST_CURVES_FREQS},
+        allowed_keys={"freq", "data_path", "gt_path", "batch_size"},
+        value_options={"freq": CONTRAST_CURVES_FREQS},
     ),
     "visturing_contrast_masking_kendall": MetricSpec(
         family="visturing",

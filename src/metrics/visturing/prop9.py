@@ -145,23 +145,26 @@ class FrequencyMaskingKendall(BaseVisTuringMetric):
                 continue
 
             order_corr = {}
-            for group, label, ideal in [
-                ("C1", "low", [0, 4, 5, 3, 2, 1]),
-                ("C2", "high", [0, 1, 2, 3, 5, 4]),
-            ]:
+            for group, label in [("C1", "low"), ("C2", "high")]:
                 masks = list(layer_diffs[group].keys())
                 if not masks:
                     continue
                 mask_order = self._ordered_masks(masks)
                 diffs_per_mask = []
                 for mask in mask_order:
+                    if mask.lower() == "nomask":
+                        continue
                     diffs_lists = layer_diffs[group][mask]
                     diffs_per_contrast = np.array([np.mean(v) for v in diffs_lists])
                     diffs_per_mask.append(diffs_per_contrast)
                 diffs_stack = np.array(diffs_per_mask)
-                order_corr[label] = calculate_spearman(
-                    diffs_stack, ideal_ordering=ideal
+                order_1 = calculate_spearman(diffs_stack[:2], ideal_ordering=[0, 1])
+                order_2 = calculate_spearman(
+                    diffs_stack[1:], ideal_ordering=[3, 2, 1, 0]
                 )
+                order_corr[label] = {
+                    key: (order_1[key] * 2 + order_2[key] * 4) / 6 for key in order_1
+                }
 
             results_per_layer.append(order_corr)
 

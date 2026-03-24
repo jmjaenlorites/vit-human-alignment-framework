@@ -67,7 +67,9 @@ class Prop2Dataset(Dataset):
         test_images: np.ndarray,
         backgrounds: np.ndarray,
         transform: Optional[Callable[[Any], Any]] = None,
-        samples: Optional[list[tuple[np.ndarray, np.ndarray, str, int]]] = None,
+        samples: Optional[
+            list[tuple[np.ndarray, np.ndarray, str, int, int, int]]
+        ] = None,
     ):
         """
         Args:
@@ -88,14 +90,17 @@ class Prop2Dataset(Dataset):
             # Aplanar estructura: cada par (img, bg) es un sample
             self.samples = []
             for level_idx, (imgs, bg) in enumerate(zip(test_images, backgrounds)):
-                for img in imgs:
-                    self.samples.append((img, bg, channel, level_idx))
+                bg_idx = 0
+                for sample_idx, img in enumerate(imgs):
+                    self.samples.append(
+                        (img, bg, channel, level_idx, sample_idx, bg_idx)
+                    )
 
     def __len__(self):
         return len(self.samples)
 
     def __getitem__(self, idx):
-        test_img, bg_img, channel, level_idx = self.samples[idx]
+        test_img, bg_img, channel, level_idx, sample_idx, bg_idx = self.samples[idx]
 
         # Convertir a float32 en [0, 1]
         if test_img.dtype == np.uint8:
@@ -119,7 +124,7 @@ class Prop2Dataset(Dataset):
             test_img = self.transform(test_img)
             bg_img = self.transform(bg_img)
 
-        return test_img, bg_img, channel, level_idx
+        return test_img, bg_img, channel, level_idx, sample_idx, bg_idx
 
 
 class Prop2TorchDatasetLoader(BaseVisTuringTorchDatasetLoader, Prop2DatasetLoader):
@@ -133,6 +138,7 @@ class Prop2TorchDatasetLoader(BaseVisTuringTorchDatasetLoader, Prop2DatasetLoade
         num_workers: int = 2,
         data_path: Optional[str] = None,
         transform: Optional[Callable[[Any], Any]] = None,
+        use_torch_upstream_semantics: bool = False,
     ):
         BaseVisTuringTorchDatasetLoader.__init__(
             self,
@@ -145,6 +151,7 @@ class Prop2TorchDatasetLoader(BaseVisTuringTorchDatasetLoader, Prop2DatasetLoade
         )
         Prop2DatasetLoader.__init__(self, data_path=data_path)
         self.channel = channel
+        self.use_torch_upstream_semantics = use_torch_upstream_semantics
 
     def get_dataset(self, transform: Optional[Callable[[Any], Any]] = None) -> Dataset:
         """Crea el PyTorch Dataset."""
@@ -168,8 +175,23 @@ class Prop2TorchDatasetLoader(BaseVisTuringTorchDatasetLoader, Prop2DatasetLoade
                 test_images = data[ch]
                 backgrounds = bgs[ch]
                 for level_idx, (imgs, bg) in enumerate(zip(test_images, backgrounds)):
-                    for img in imgs:
-                        samples.append((img, bg, ch, level_idx))
+                    bg_idx = 0
+                    ref_img = bg
+                    if self.use_torch_upstream_semantics:
+                        if ch == "achrom":
+                            ref_img = imgs[0]
+                        else:
+                            bg_idx = int(
+                                np.argwhere(
+                                    np.where(imgs == bg, True, False).all(
+                                        axis=(1, 2, 3)
+                                    )
+                                ).squeeze()
+                            )
+                    for sample_idx, img in enumerate(imgs):
+                        samples.append(
+                            (img, ref_img, ch, level_idx, sample_idx, bg_idx)
+                        )
             return Prop2Dataset(
                 channel=self.channel,
                 test_images=np.array([]),
@@ -178,9 +200,31 @@ class Prop2TorchDatasetLoader(BaseVisTuringTorchDatasetLoader, Prop2DatasetLoade
                 samples=samples,
             )
 
+        samples = None
+        if self.use_torch_upstream_semantics:
+            samples = []
+            test_images = data[self.channel]
+            backgrounds = bgs[self.channel]
+            for level_idx, (imgs, bg) in enumerate(zip(test_images, backgrounds)):
+                bg_idx = 0
+                ref_img = bg
+                if self.channel == "achrom":
+                    ref_img = imgs[0]
+                else:
+                    bg_idx = int(
+                        np.argwhere(
+                            np.where(imgs == bg, True, False).all(axis=(1, 2, 3))
+                        ).squeeze()
+                    )
+                for sample_idx, img in enumerate(imgs):
+                    samples.append(
+                        (img, ref_img, self.channel, level_idx, sample_idx, bg_idx)
+                    )
+
         return Prop2Dataset(
             channel=self.channel,
             test_images=data[self.channel],
             backgrounds=bgs[self.channel],
             transform=self.transform,
+            samples=samples,
         )

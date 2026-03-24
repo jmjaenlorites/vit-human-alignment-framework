@@ -29,27 +29,28 @@ def download_and_extract(
     url = ZENODO_BASE_URL + filename
     download_path = os.path.join(target_path, filename)
 
-    # Descargar si no existe
-    if not os.path.exists(download_path):
-        print(f"Downloading {filename} from Zenodo...")
-        wget.download(url, download_path)
-        print()  # Nueva línea después de la barra de progreso
-
     # Determinar carpeta de extracción
     if extract_folder is None:
         extract_folder = filename.replace(".zip", "")
 
     extracted_path = os.path.join(target_path, extract_folder)
 
-    # Extraer si no existe
-    if not os.path.exists(extracted_path):
-        print(f"Extracting {filename}...")
-        with ZipFile(download_path) as zipObj:
-            zipObj.extractall(target_path)
+    try:
+        # Descargar si no existe
+        if not os.path.exists(download_path):
+            print(f"Downloading {filename} from Zenodo...")
+            wget.download(url, download_path)
+            print()  # Nueva línea después de la barra de progreso
 
-    # Eliminar el zip para ahorrar espacio
-    if os.path.exists(download_path):
-        os.remove(download_path)
+        # Extraer si no existe
+        if not os.path.exists(extracted_path):
+            print(f"Extracting {filename}...")
+            with ZipFile(download_path) as zipObj:
+                zipObj.extractall(target_path)
+    finally:
+        # Eliminar el zip aunque falle la extracción para evitar acumulación.
+        if os.path.exists(download_path):
+            os.remove(download_path)
 
     return extracted_path
 

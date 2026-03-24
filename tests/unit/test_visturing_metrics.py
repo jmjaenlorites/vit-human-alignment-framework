@@ -1,12 +1,14 @@
 """Unit tests for visturing metric components."""
 
 import numpy as np
+import pytest
 import torch
 
 from src.metrics.visturing.distance_functions import (
     calculate_correlations,
     cosine_distance,
     euclidean_distance,
+    kendall_correlation_jax,
 )
 from src.metrics.visturing.prop1 import SpectralSensitivityPearson
 from src.metrics.visturing.prop2 import WeberLawPearson
@@ -46,6 +48,19 @@ class TestVisturingDistanceFunctions:
         assert correlations["pearson"] > 0.99
         assert correlations["kendall"] > 0.99
         assert correlations["spearman"] > 0.99
+
+    def test_kendall_correlation_jax_matches_upstream_formula(self):
+        x = np.array([1, 4, 2, 3, 5], dtype=np.float32)
+        y = np.array([5, 3, 4, 1, 2], dtype=np.float32)
+
+        correlation = float(kendall_correlation_jax(x, y))
+        diff_x = x[:, None] - x[None, :]
+        diff_y = y[:, None] - y[None, :]
+        expected = np.sum(np.tanh(diff_x / 0.1) * np.tanh(diff_y / 0.1)) / (
+            x.shape[0] * (x.shape[0] - 1)
+        )
+
+        assert correlation == pytest.approx(expected, abs=1e-6)
 
 
 class TestVisturingMetricInitialization:
