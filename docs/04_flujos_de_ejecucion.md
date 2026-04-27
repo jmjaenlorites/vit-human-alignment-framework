@@ -124,6 +124,13 @@ sequenceDiagram
 ### Modelos de `timm`
 - formato: `timm::<model_name>`
 - ejemplo: `timm::vit_base_patch16_224`
+- también admite checkpoints preentrenados explícitos de `timm`, por ejemplo:
+  `timm::vit_base_patch16_224.augreg_in21k_ft_in1k`
+  `timm::vit_base_patch16_224.mae`
+  `timm::vit_base_patch16_clip_224.laion2b_ft_in1k`
+- las opciones válidas dependen de la versión de `timm` instalada en el entorno actual
+- si un modelo `timm` no tiene pesos preentrenados disponibles, el adapter lo carga con
+  inicialización aleatoria y emite un `warning`
 
 La validación del JSON usa `src/models/resolver.py` para aceptar o rechazar nombres de modelo.
 

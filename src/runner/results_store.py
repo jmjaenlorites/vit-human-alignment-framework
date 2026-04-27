@@ -1,8 +1,17 @@
+import time
+from datetime import datetime, timezone
 from typing import Any
 
 import pandas as pd
 
 from .types import ResolvedExperiment
+
+
+class _KeepExisting:
+    """Sentinel: do not touch the existing column value on an upsert."""
+
+
+_KEEP = _KeepExisting()
 
 
 class ResultsStore:
@@ -17,10 +26,13 @@ class ResultsStore:
         "result",
         "error",
         "config_hash",
+        "started_at",
+        "duration_seconds",
     ]
 
     def __init__(self, csv_path: str):
         self.csv_path = csv_path
+        self._perf_starts: dict[str, float] = {}
 
     def should_run(
         self,
@@ -42,28 +54,44 @@ class ResultsStore:
         return True
 
     def mark_running(self, experiment: ResolvedExperiment) -> None:
+        started_iso = datetime.now(timezone.utc).isoformat(timespec="seconds")
+        self._perf_starts[experiment.run_key] = time.perf_counter()
         self._upsert(
             experiment,
             status="running",
             result=None,
             error=None,
+            started_at=started_iso,
+            duration_seconds=None,
         )
 
     def mark_done(self, experiment: ResolvedExperiment, result: Any) -> None:
+        duration = self._consume_duration(experiment.run_key)
         self._upsert(
             experiment,
             status="done",
             result=result,
             error=None,
+            started_at=_KEEP,
+            duration_seconds=duration,
         )
 
     def mark_error(self, experiment: ResolvedExperiment, error: str) -> None:
+        duration = self._consume_duration(experiment.run_key)
         self._upsert(
             experiment,
             status="error",
             result=None,
             error=error,
+            started_at=_KEEP,
+            duration_seconds=duration,
         )
+
+    def _consume_duration(self, run_key: str) -> float | None:
+        started = self._perf_starts.pop(run_key, None)
+        if started is None:
+            return None
+        return round(time.perf_counter() - started, 3)
 
     def _upsert(
         self,
@@ -71,6 +99,8 @@ class ResultsStore:
         status: str,
         result: Any,
         error: str | None,
+        started_at: Any = _KEEP,
+        duration_seconds: Any = None,
     ) -> None:
         df = self._normalize_dtypes(self._load_or_create())
         row = {
@@ -82,12 +112,19 @@ class ResultsStore:
             "result": result,
             "error": error,
             "config_hash": experiment.config_hash,
+            "started_at": started_at,
+            "duration_seconds": duration_seconds,
         }
         mask = df["run_key"] == experiment.run_key
         if mask.any():
             for column, value in row.items():
+                if isinstance(value, _KeepExisting):
+                    continue
                 df.loc[mask, column] = value
         else:
+            for column, value in list(row.items()):
+                if isinstance(value, _KeepExisting):
+                    row[column] = None
             df = pd.concat([df, pd.DataFrame([row])], ignore_index=True)
         df.to_csv(self.csv_path, index=False)
 
@@ -114,13 +151,9 @@ class ResultsStore:
         except FileNotFoundError:
             return self._normalize_dtypes(pd.DataFrame(columns=self.COLUMNS))
 
-        missing_columns = [
-            column for column in self.COLUMNS if column not in df.columns
-        ]
-        if missing_columns:
-            raise ValueError(
-                f"Results CSV is missing required columns: {missing_columns}"
-            )
+        for column in self.COLUMNS:
+            if column not in df.columns:
+                df[column] = None
         return self._normalize_dtypes(df[self.COLUMNS].copy())
 
     def _normalize_dtypes(self, df: pd.DataFrame) -> pd.DataFrame:

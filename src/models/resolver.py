@@ -20,7 +20,7 @@ def list_internal_model_names() -> list[str]:
 
 @lru_cache(maxsize=1)
 def list_available_timm_models() -> list[str]:
-    return sorted(timm.list_models())
+    return sorted(set(timm.list_models()) | set(timm.list_models(pretrained=True)))
 
 
 def list_supported_model_options() -> list[str]:

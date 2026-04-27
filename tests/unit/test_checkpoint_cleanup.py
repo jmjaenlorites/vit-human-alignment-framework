@@ -23,6 +23,10 @@ def test_timm_models_use_temporary_checkpoint_cache(monkeypatch) -> None:
         captured["cache_dir"] = cache_dir
         return FakeModel()
 
+    monkeypatch.setattr(
+        "src.models.vit_b16.list_pretrained_timm_models",
+        lambda: {"vit_small_patch16_224"},
+    )
     monkeypatch.setattr("src.models.vit_b16.timm.create_model", fake_create_model)
 
     DynamicTimmModelAdapter("vit_small_patch16_224")
@@ -33,6 +37,96 @@ def test_timm_models_use_temporary_checkpoint_cache(monkeypatch) -> None:
 
     cleanup_checkpoint_cache()
     assert not Path(captured["cache_dir"]).exists()
+
+
+def test_timm_models_without_pretrained_weights_warn_and_use_random_init(
+    monkeypatch, caplog
+) -> None:
+    captured = {}
+
+    class FakeModel:
+        def eval(self):
+            return self
+
+        def to(self, _device):
+            return self
+
+    def fake_create_model(model_name: str, pretrained: bool, cache_dir: str):
+        captured["model_name"] = model_name
+        captured["pretrained"] = pretrained
+        captured["cache_dir"] = cache_dir
+        return FakeModel()
+
+    monkeypatch.setattr("src.models.vit_b16.list_pretrained_timm_models", lambda: set())
+    monkeypatch.setattr("src.models.vit_b16.timm.create_model", fake_create_model)
+
+    DynamicTimmModelAdapter("vit_small_patch16_224")
+
+    assert captured["model_name"] == "vit_small_patch16_224"
+    assert captured["pretrained"] is False
+    assert "loading random initialization" in caplog.text
+
+
+def test_timm_transform_uses_loaded_model_config(monkeypatch) -> None:
+    captured = {}
+
+    class FakeModel:
+        def eval(self):
+            return self
+
+        def to(self, _device):
+            return self
+
+    fake_model = FakeModel()
+
+    def fake_create_model(model_name: str, pretrained: bool, cache_dir: str):
+        captured["model_name"] = model_name
+        captured["pretrained"] = pretrained
+        captured["cache_dir"] = cache_dir
+        return fake_model
+
+    def fake_resolve_data_config(_config, model):
+        captured["resolve_model_arg"] = model
+        return {"input_size": (3, 384, 384)}
+
+    def fake_create_transform(**kwargs):
+        captured["transform_kwargs"] = kwargs
+        return "fake-transform"
+
+    monkeypatch.setattr(
+        "src.models.vit_b16.list_pretrained_timm_models",
+        lambda: {"vit_base_patch16_384.augreg_in1k"},
+    )
+    monkeypatch.setattr("src.models.vit_b16.timm.create_model", fake_create_model)
+    monkeypatch.setattr(
+        "src.models.vit_b16.timm.data.resolve_data_config",
+        fake_resolve_data_config,
+    )
+    monkeypatch.setattr(
+        "src.models.vit_b16.timm.data.create_transform",
+        fake_create_transform,
+    )
+
+    model = DynamicTimmModelAdapter("vit_base_patch16_384.augreg_in1k")
+
+    assert captured["resolve_model_arg"] is fake_model
+    assert captured["transform_kwargs"] == {
+        "input_size": (3, 384, 384),
+        "is_training": False,
+    }
+    assert model.transform == "fake-transform"
+
+
+def test_internal_timm_aliases_require_pretrained_weights(monkeypatch) -> None:
+    monkeypatch.setattr("src.models.vit_b16.list_pretrained_timm_models", lambda: set())
+
+    with pytest.raises(
+        ValueError,
+        match="requires pretrained timm weights",
+    ):
+        from src.models.vit_b16 import ViT_B_16
+
+        ViT_B_16()
 
 
 def test_download_and_extract_removes_zip_after_success(tmp_path, monkeypatch) -> None:

@@ -1,4 +1,6 @@
+import logging
 import math
+from functools import lru_cache
 from typing import Any, Optional
 
 import timm
@@ -8,6 +10,13 @@ from ..models.base import BaseModelAdapter
 from ..models.checkpoint_cache import get_checkpoint_cache_dir
 from ..utils.common_enums import BackendEnum
 from ..utils.common_types import ArrayLike
+
+logger = logging.getLogger(__name__)
+
+
+@lru_cache(maxsize=1)
+def list_pretrained_timm_models() -> set[str]:
+    return set(timm.list_models(pretrained=True))
 
 
 class TimmViTAdapter(BaseModelAdapter):
@@ -23,11 +32,12 @@ class TimmViTAdapter(BaseModelAdapter):
 
     MODEL_NAME: str  # Debe ser definido por subclases
     DISPLAY_NAME: str  # Debe ser definido por subclases
+    REQUIRE_PRETRAINED = True
 
     def __init__(self, config: dict[str, Any] = {}):
         super().__init__(self.DISPLAY_NAME, BackendEnum.TORCH, config)
         self.transform = timm.data.create_transform(
-            **timm.data.resolve_data_config({}, model=self.MODEL_NAME),
+            **timm.data.resolve_data_config({}, model=self.model),
             is_training=False,
         )
         # Configuración para attention rollout
@@ -36,9 +46,21 @@ class TimmViTAdapter(BaseModelAdapter):
         self._EPS = 1e-8
 
     def _load_model(self, config: dict[str, Any]) -> Any:
+        has_pretrained_weights = self.MODEL_NAME in list_pretrained_timm_models()
+        if self.REQUIRE_PRETRAINED and not has_pretrained_weights:
+            raise ValueError(
+                f"Model {self.MODEL_NAME} requires pretrained timm weights, but none are available"
+            )
+
+        if not self.REQUIRE_PRETRAINED and not has_pretrained_weights:
+            logger.warning(
+                "Model %s has no pretrained timm weights; loading random initialization",
+                self.MODEL_NAME,
+            )
+
         model = timm.create_model(
             self.MODEL_NAME,
-            pretrained=True,
+            pretrained=has_pretrained_weights,
             cache_dir=get_checkpoint_cache_dir(),
         )
         model.eval()
@@ -253,6 +275,7 @@ class DynamicTimmModelAdapter(TimmViTAdapter):
 
     MODEL_NAME = ""
     DISPLAY_NAME = ""
+    REQUIRE_PRETRAINED = False
 
     def __init__(self, timm_model_name: str, config: dict[str, Any] | None = None):
         self.MODEL_NAME = timm_model_name

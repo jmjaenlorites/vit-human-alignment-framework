@@ -269,17 +269,46 @@ def test_json_source_accepts_timm_prefixed_model(tmp_path, monkeypatch) -> None:
         encoding="utf-8",
     )
     monkeypatch.setattr(
-        "src.runner.config_validation.list_supported_model_options",
-        lambda: ["vit-b16", "timm::vit_base_patch16_224"],
-    )
-    monkeypatch.setattr(
-        "src.runner.config_validation.validate_model_name",
-        lambda model_name: None,
+        "src.models.resolver.list_available_timm_models",
+        lambda: ["vit_base_patch16_224"],
     )
 
     experiments = JSONExperimentSource(str(config_path)).load()
 
     assert experiments[0].model_name == "timm::vit_base_patch16_224"
+
+
+def test_json_source_accepts_timm_prefixed_pretrained_tag_model(
+    tmp_path, monkeypatch
+) -> None:
+    config_path = tmp_path / "experiments.json"
+    config_path.write_text(
+        json.dumps(
+            {
+                "models": ["timm::vit_base_patch16_224.mae"],
+                "experiments": [
+                    {
+                        "experiment_id": "levels-within",
+                        "metric": "levels_triplet_accuracy",
+                        "config": {
+                            "split": "within_class",
+                            "levels_path": "/tmp/levels",
+                            "imagenet_path": "/tmp/imagenet",
+                        },
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        "src.models.resolver.list_available_timm_models",
+        lambda: ["vit_base_patch16_224.mae"],
+    )
+
+    experiments = JSONExperimentSource(str(config_path)).load()
+
+    assert experiments[0].model_name == "timm::vit_base_patch16_224.mae"
 
 
 def test_json_source_rejects_unknown_metric(tmp_path) -> None:

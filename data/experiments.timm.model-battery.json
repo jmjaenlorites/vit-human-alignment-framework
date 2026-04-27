@@ -2,9 +2,7 @@
   "defaults": {},
   "dataset_defaults": {
     "levels": {
-      "batch_size": 8,
-      "levels_path": "tests/data/levels",
-      "imagenet_path": "tests/data/levels/images"
+      "batch_size": 8
     },
     "visturing": {
       "batch_size": 8,
@@ -12,17 +10,28 @@
       "gt_path": "tests/data/visturing"
     },
     "tid": {
-      "batch_size": 8,
-      "dataset_path": "tests/data/tid"
+      "batch_size": 8
     },
     "nights": {
-      "batch_size": 8,
-      "dataset_path": "tests/data/nights"
+      "batch_size": 8
     },
-    "saliency": {}
+    "saliency": {
+      "batch_size": 8
+    }
   },
   "models": [
-    "timm::vit_base_patch16_224"
+    "timm::vit_tiny_patch16_224.augreg_in21k_ft_in1k",
+    "timm::vit_small_patch16_224.augreg_in21k_ft_in1k",
+    "timm::vit_base_patch16_224.augreg_in21k_ft_in1k",
+    "timm::vit_large_patch16_224.augreg_in21k_ft_in1k",
+    "timm::vit_base_patch16_224.augreg_in1k",
+    "timm::vit_base_patch16_224.mae",
+    "timm::vit_base_patch16_224.dino",
+    "timm::vit_base_patch16_clip_224.laion2b_ft_in1k",
+    "timm::vit_base_patch8_224.augreg_in21k_ft_in1k",
+    "timm::vit_base_patch32_224.augreg_in21k_ft_in1k",
+    "timm::vit_base_patch16_224.augreg_in21k",
+    "timm::vit_base_patch16_384.augreg_in1k"
   ],
   "experiments": [
     {
