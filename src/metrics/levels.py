@@ -71,6 +71,10 @@ class TripletAccuracy(BaseLevelsMetric):
                     sim_12 = self._cosine_similarity_torch(feat1, feat2).item()
                     sim_13 = self._cosine_similarity_torch(feat1, feat3).item()
                     sim_23 = self._cosine_similarity_torch(feat2, feat3).item()
+                elif self._backend == BackendEnum.JAX:
+                    sim_12 = float(self._cosine_similarity_jax(feat1, feat2))
+                    sim_13 = float(self._cosine_similarity_jax(feat1, feat3))
+                    sim_23 = float(self._cosine_similarity_jax(feat2, feat3))
                 else:
                     raise NotImplementedError(
                         f"Backend {self._backend} not implemented"
@@ -134,6 +138,13 @@ class TripletAccuracy(BaseLevelsMetric):
             a.unsqueeze(0), b.unsqueeze(0), dim=1
         )[0]
 
+    def _cosine_similarity_jax(self, a: Any, b: Any) -> Any:
+        """Similitud coseno entre dos vectores `jnp.ndarray` 1-D."""
+        import jax.numpy as jnp
+
+        denom = (jnp.linalg.norm(a) * jnp.linalg.norm(b)).clip(min=1e-8)
+        return jnp.dot(a, b) / denom
+
     def get_image_path(self, batch, batch_idx: int, img_idx: int) -> str:
         """Helper para obtener el path de una imagen del batch."""
         # Esta es una función auxiliar que necesita acceso a los paths originales
@@ -193,9 +204,13 @@ class LevelsMetricsCalculator(BaseMetricCalculator):
     def get_dataset_loader(
         self, transform: Optional[Callable[[Any], Any]] = None
     ) -> LevelsTorchDatasetLoader:
-        """Carga dataset Levels con el split especificado."""
+        """Carga dataset Levels con el split especificado.
+
+        El loader es Torch para todos los backends; la ingesta no depende del
+        backend numérico del modelo.
+        """
         match self._backend:
-            case BackendEnum.TORCH:
+            case BackendEnum.TORCH | BackendEnum.JAX:
                 return LevelsTorchDatasetLoader(
                     batch_size=32,
                     shuffle=False,
@@ -205,8 +220,6 @@ class LevelsMetricsCalculator(BaseMetricCalculator):
                     levels_path=self._levels_path,
                     imagenet_path=self._imagenet_path,
                 )
-            case BackendEnum.JAX:
-                raise ValueError(f"Backend {self._backend} not supported")
             case _:
                 raise ValueError(f"Backend {self._backend} not supported")
 

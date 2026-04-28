@@ -69,6 +69,10 @@ class SpearmanCorrelationMOS(BaseTIDMetric):
                 if self._backend == BackendEnum.TORCH:
                     similarity = self._cosine_similarity_torch(feat_ref, feat_dist)
                     self.similarities[layer_idx].append(similarity.item())
+                elif self._backend == BackendEnum.JAX:
+                    self.similarities[layer_idx].append(
+                        float(self._cosine_similarity_jax(feat_ref, feat_dist))
+                    )
                 else:
                     raise NotImplementedError(
                         f"Backend {self._backend} not implemented"
@@ -86,6 +90,13 @@ class SpearmanCorrelationMOS(BaseTIDMetric):
         return torch.nn.functional.cosine_similarity(
             a.unsqueeze(0), b.unsqueeze(0), dim=1
         )[0]
+
+    def _cosine_similarity_jax(self, a: Any, b: Any) -> Any:
+        """Similitud coseno entre dos vectores `jnp.ndarray` 1-D."""
+        import jax.numpy as jnp
+
+        denom = (jnp.linalg.norm(a) * jnp.linalg.norm(b)).clip(min=1e-8)
+        return jnp.dot(a, b) / denom
 
     def finalize(self) -> dict[str, Any]:
         """
@@ -156,7 +167,7 @@ class TIDMetricsCalculator(BaseMetricCalculator):
     ) -> TID2013TorchDatasetLoader:
         """Carga dataset TID2013."""
         match self._backend:
-            case BackendEnum.TORCH:
+            case BackendEnum.TORCH | BackendEnum.JAX:
                 return TID2013TorchDatasetLoader(
                     batch_size=32,
                     shuffle=False,
@@ -164,8 +175,6 @@ class TIDMetricsCalculator(BaseMetricCalculator):
                     transform=transform,
                     dataset_path=self._dataset_path,
                 )
-            case BackendEnum.JAX:
-                raise ValueError(f"Backend {self._backend} not supported")
             case _:
                 raise ValueError(f"Backend {self._backend} not supported")
 

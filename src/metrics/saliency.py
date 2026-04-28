@@ -1,5 +1,6 @@
 from typing import Any, Callable, Optional
 
+import jax.numpy as jnp
 import torch
 
 from ..dataset_loaders.saliency import (
@@ -46,6 +47,29 @@ class AUC_Judd(BaseSaliencyMetric):
         fp = torch.cat([zeros, fp, ones])
         return torch.trapz(tp, fp)
 
+    def _calculate_jax(
+        self,
+        pred_map: jnp.ndarray,
+        ground_truth_saliency_map: jnp.ndarray,
+        ground_truth_fixation_map: jnp.ndarray,
+    ) -> jnp.ndarray:
+        scores = jnp.asarray(pred_map).reshape(-1).astype(jnp.float32)
+        fixations = (jnp.asarray(ground_truth_fixation_map).reshape(-1) > 0).astype(
+            jnp.float32
+        )
+        num_fixations = fixations.sum()
+        num_non_fix = fixations.size - num_fixations
+        if float(num_fixations) <= 0 or float(num_non_fix) <= 0:
+            return jnp.array(float("nan"))
+
+        sorted_indices = jnp.argsort(-scores)
+        sorted_fix = fixations[sorted_indices]
+        tp = jnp.cumsum(sorted_fix) / (num_fixations + self._EPS)
+        fp = jnp.cumsum(1.0 - sorted_fix) / (num_non_fix + self._EPS)
+        tp = jnp.concatenate([jnp.zeros(1), tp, jnp.ones(1)])
+        fp = jnp.concatenate([jnp.zeros(1), fp, jnp.ones(1)])
+        return jnp.trapezoid(tp, fp)
+
 
 class PearsonCorrelationCoefficient(BaseSaliencyMetric):
     name: str = "saliency_pearson_correlation_coefficient"
@@ -81,6 +105,21 @@ class PearsonCorrelationCoefficient(BaseSaliencyMetric):
         result = (x_centered * y_centered).sum() / denom
         return result
 
+    def _calculate_jax(
+        self,
+        pred_map: jnp.ndarray,
+        ground_truth_saliency_map: jnp.ndarray,
+        ground_truth_fixation_map: jnp.ndarray,
+    ) -> jnp.ndarray:
+        x = jnp.asarray(pred_map).reshape(-1).astype(jnp.float32)
+        y = jnp.asarray(ground_truth_saliency_map).reshape(-1).astype(jnp.float32)
+        x_centered = x - x.mean()
+        y_centered = y - y.mean()
+        denom = jnp.sqrt((x_centered**2).sum()) * jnp.sqrt((y_centered**2).sum())
+        if float(denom) <= self._EPS:
+            return jnp.array(float("nan"))
+        return (x_centered * y_centered).sum() / denom
+
 
 class SaliencyMetricsCalculator(BaseMetricCalculator):
     name: str = "SaliencyMetricsCalculator"
@@ -106,9 +145,14 @@ class SaliencyMetricsCalculator(BaseMetricCalculator):
     def get_dataset_loader(
         self, transform: Optional[Callable[[Any], Any]] = None
     ) -> BaseSaliencyDatasetLoader:
-        """Carga dataset y metadatos necesarios (responsabilidad local)."""
+        """Carga dataset y metadatos necesarios (responsabilidad local).
+
+        El loader es Torch para todos los backends: la ingesta es I/O y el
+        adaptador (p.ej. el JAX) convierte los tensores torch a su backend en
+        el `forward`.
+        """
         match self._backend:
-            case BackendEnum.TORCH:
+            case BackendEnum.TORCH | BackendEnum.JAX:
                 return SaliencyMIT1003TorchDatasetLoader(
                     batch_size=self._batch_size,
                     shuffle=False,
@@ -116,8 +160,6 @@ class SaliencyMetricsCalculator(BaseMetricCalculator):
                     transform=transform,
                     dataset_path=self._dataset_path,
                 )
-            case BackendEnum.JAX:
-                raise ValueError(f"Backend {self._backend} not supported")
             case _:
                 raise ValueError(f"Backend {self._backend} not supported")
 

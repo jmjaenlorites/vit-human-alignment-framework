@@ -62,6 +62,11 @@ def test_list_supported_model_options_includes_internal_and_timm_models(
         "src.models.resolver.list_available_timm_models",
         lambda: ["vit_base_patch16_224", "vit_base_patch16_224.mae"],
     )
+    # Aislamos el namespace google::* para no depender de red.
+    monkeypatch.setattr(
+        "src.models.resolver.list_available_google_models",
+        lambda: [],
+    )
 
     assert list_supported_model_options() == [
         "vit-b16",

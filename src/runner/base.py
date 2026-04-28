@@ -41,6 +41,9 @@ class Runner:
         results_path: Optional[str] = None,
         backend: BackendEnum = BackendEnum.TORCH,
     ):
+        # NOTE: `backend` se conserva por retrocompatibilidad de la firma. Los
+        # calculators y métricas se construyen con `model.backend` (inferido
+        # por modelo) — permite mezclar modelos torch y JAX en el mismo JSON.
         self.csv_path = csv_path
         self.json_path = json_path
         self.output_path = output_path
@@ -148,7 +151,7 @@ class Runner:
                 visturing_results = {}
 
                 if "visturing_spectral_sensitivity" in visturing_names:
-                    calc = create_prop1_calculator(self.backend)
+                    calc = create_prop1_calculator(model.backend)
                     visturing_results.update(calc.run(model))
 
                 if (
@@ -156,7 +159,7 @@ class Runner:
                     or "visturing_weber_law_kendall" in visturing_names
                 ):
                     calc = create_prop2_calculator(
-                        self.backend,
+                        model.backend,
                         include_kendall="visturing_weber_law_kendall"
                         in visturing_names,
                     )
@@ -167,7 +170,7 @@ class Runner:
                     or "visturing_csf_kendall" in visturing_names
                 ):
                     calc = create_prop3_4_calculator(
-                        self.backend,
+                        model.backend,
                         include_kendall="visturing_csf_kendall" in visturing_names,
                     )
                     visturing_results.update(calc.run(model))
@@ -177,7 +180,7 @@ class Runner:
                     or "visturing_campbell_blakemore_kendall" in visturing_names
                 ):
                     calc = create_prop5_calculator(
-                        self.backend,
+                        model.backend,
                         include_kendall="visturing_campbell_blakemore_kendall"
                         in visturing_names,
                     )
@@ -188,22 +191,22 @@ class Runner:
                     or "visturing_contrast_curves_kendall" in visturing_names
                 ):
                     calc = create_prop6_7_calculator(
-                        self.backend,
+                        model.backend,
                         include_kendall="visturing_contrast_curves_kendall"
                         in visturing_names,
                     )
                     visturing_results.update(calc.run(model))
 
                 if "visturing_contrast_masking_kendall" in visturing_names:
-                    calc = create_prop8_calculator(self.backend)
+                    calc = create_prop8_calculator(model.backend)
                     visturing_results.update(calc.run(model))
 
                 if "visturing_frequency_masking_kendall" in visturing_names:
-                    calc = create_prop9_calculator(self.backend)
+                    calc = create_prop9_calculator(model.backend)
                     visturing_results.update(calc.run(model))
 
                 if "visturing_orientation_masking_kendall" in visturing_names:
-                    calc = create_prop10_calculator(self.backend)
+                    calc = create_prop10_calculator(model.backend)
                     visturing_results.update(calc.run(model))
 
                 self._update_cells(
@@ -218,7 +221,7 @@ class Runner:
 
             if saliency_metrics:
                 saliency_metrics_calculator = SaliencyMetricsCalculator(
-                    self.backend, saliency_metrics
+                    model.backend, saliency_metrics
                 )
                 saliency_results = saliency_metrics_calculator.run(model)
                 self._update_cells(
@@ -234,7 +237,7 @@ class Runner:
                     [metric.name for metric in tid_metrics],
                 )
                 tid_metrics_calculator = TIDMetricsCalculator(
-                    self.backend, metrics=tid_metrics
+                    model.backend, metrics=tid_metrics
                 )
                 tid_results = tid_metrics_calculator.run(model)
                 self._update_cells(
@@ -253,7 +256,7 @@ class Runner:
                     [metric.name for metric in levels_metrics],
                 )
                 levels_metrics_calculator = LevelsMetricsCalculator(
-                    self.backend, metrics=levels_metrics
+                    model.backend, metrics=levels_metrics
                 )
                 levels_results = levels_metrics_calculator.run(model)
                 self._update_cells(
@@ -269,7 +272,7 @@ class Runner:
                     [metric.name for metric in nights_metrics],
                 )
                 nights_metrics_calculator = NightsMetricsCalculator(
-                    self.backend, metrics=nights_metrics
+                    model.backend, metrics=nights_metrics
                 )
                 nights_results = nights_metrics_calculator.run(model)
                 self._update_cells(
@@ -321,7 +324,7 @@ class Runner:
 
         if metric_spec.family == "saliency":
             calculator = SaliencyMetricsCalculator(
-                self.backend,
+                model.backend,
                 [metric],
                 dataset_path=experiment.config.get("dataset_path"),
                 batch_size=experiment.config.get("batch_size", 32),
@@ -330,7 +333,7 @@ class Runner:
 
         if metric_spec.family == "tid":
             calculator = TIDMetricsCalculator(
-                self.backend,
+                model.backend,
                 metrics=[metric],
                 dataset_path=experiment.config.get("dataset_path"),
             )
@@ -338,7 +341,7 @@ class Runner:
 
         if metric_spec.family == "levels":
             calculator = LevelsMetricsCalculator(
-                self.backend,
+                model.backend,
                 split=experiment.config.get("split", "between_class"),
                 metrics=[metric],
                 levels_path=experiment.config.get("levels_path"),
@@ -348,7 +351,7 @@ class Runner:
 
         if metric_spec.family == "nights":
             calculator = NightsMetricsCalculator(
-                self.backend,
+                model.backend,
                 metrics=[metric],
                 dataset_path=experiment.config.get("dataset_path"),
             )
@@ -362,7 +365,7 @@ class Runner:
 
         if metric_name == "visturing_spectral_sensitivity":
             calculator = create_prop1_calculator(
-                self.backend,
+                model.backend,
                 data_path=config.get("data_path"),
                 gt_path=config.get("gt_path"),
                 batch_size=config.get("batch_size", 32),
@@ -372,7 +375,7 @@ class Runner:
             "visturing_weber_law_kendall",
         }:
             calculator = create_prop2_calculator(
-                self.backend,
+                model.backend,
                 channel=config.get("channel", "all"),
                 data_path=config.get("data_path"),
                 gt_path=config.get("gt_path"),
@@ -381,7 +384,7 @@ class Runner:
             )
         elif metric_name in {"visturing_csf_pearson", "visturing_csf_kendall"}:
             calculator = create_prop3_4_calculator(
-                self.backend,
+                model.backend,
                 channel=config.get("channel", "all"),
                 data_path=config.get("data_path"),
                 gt_path=config.get("gt_path"),
@@ -393,7 +396,7 @@ class Runner:
             "visturing_campbell_blakemore_kendall",
         }:
             calculator = create_prop5_calculator(
-                self.backend,
+                model.backend,
                 mask_freq=config.get("mask_freq", "all"),
                 data_path=config.get("data_path"),
                 gt_path=config.get("gt_path"),
@@ -405,7 +408,7 @@ class Runner:
             "visturing_contrast_curves_kendall",
         }:
             calculator = create_prop6_7_calculator(
-                self.backend,
+                model.backend,
                 channel=config.get("channel", "all"),
                 freq=config.get("freq", "all"),
                 data_path=config.get("data_path"),
@@ -415,7 +418,7 @@ class Runner:
             )
         elif metric_name == "visturing_contrast_masking_kendall":
             calculator = create_prop8_calculator(
-                self.backend,
+                model.backend,
                 freq=config.get("freq", "all"),
                 mask_contrast=config.get("mask_contrast", "0075"),
                 data_path=config.get("data_path"),
@@ -424,7 +427,7 @@ class Runner:
             )
         elif metric_name == "visturing_frequency_masking_kendall":
             calculator = create_prop9_calculator(
-                self.backend,
+                model.backend,
                 freq=config.get("freq", "all"),
                 mask_freq=config.get("mask_freq", "1p5"),
                 data_path=config.get("data_path"),
@@ -433,7 +436,7 @@ class Runner:
             )
         elif metric_name == "visturing_orientation_masking_kendall":
             calculator = create_prop10_calculator(
-                self.backend,
+                model.backend,
                 freq=config.get("freq", "all"),
                 mask_orientation=config.get("mask_orientation", "0"),
                 data_path=config.get("data_path"),

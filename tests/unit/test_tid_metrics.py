@@ -124,8 +124,9 @@ class TestSpearmanCorrelationMOS:
 
     def test_no_correlation(self):
         """Test Spearman with no correlation (random)."""
+        torch.manual_seed(0)
         metric = SpearmanCorrelationMOS(BackendEnum.TORCH)
-        
+
         num_samples = 20
         num_layers = 2
         hidden_dim = 768

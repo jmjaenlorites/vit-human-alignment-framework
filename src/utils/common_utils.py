@@ -11,6 +11,9 @@ def get_backend_device(backend: BackendEnum):
         case BackendEnum.TORCH:
             return torch.device("cuda" if torch.cuda.is_available() else "cpu")
         case BackendEnum.JAX:
-            return jax.devices("gpu")[0]
+            try:
+                return jax.devices("gpu")[0]
+            except RuntimeError:
+                return jax.devices("cpu")[0]
         case _:
             raise ValueError(f"Backend {backend} not supported")

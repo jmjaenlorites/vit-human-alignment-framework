@@ -1,5 +1,6 @@
 from .base import BaseModelAdapter
 from .resolver import (
+    GOOGLE_MODEL_PREFIX,
     INTERNAL_MODEL_FACTORIES,
     TIMM_MODEL_PREFIX,
     list_supported_model_options,
@@ -16,6 +17,7 @@ def load_model(model_name: str) -> BaseModelAdapter:
 
 __all__ = [
     "BaseModelAdapter",
+    "GOOGLE_MODEL_PREFIX",
     "SUPPORTED_MODELS",
     "TIMM_MODEL_PREFIX",
     "list_supported_model_options",

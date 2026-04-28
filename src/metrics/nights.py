@@ -80,6 +80,9 @@ class PreferenceAccuracy(BaseNightsMetric):
                     sim_right = self._cosine_similarity_torch(
                         feat_ref, feat_right
                     ).item()
+                elif self._backend == BackendEnum.JAX:
+                    sim_left = float(self._cosine_similarity_jax(feat_ref, feat_left))
+                    sim_right = float(self._cosine_similarity_jax(feat_ref, feat_right))
                 else:
                     raise NotImplementedError(
                         f"Backend {self._backend} not implemented"
@@ -105,6 +108,13 @@ class PreferenceAccuracy(BaseNightsMetric):
         return torch.nn.functional.cosine_similarity(
             a.unsqueeze(0), b.unsqueeze(0), dim=1
         )[0]
+
+    def _cosine_similarity_jax(self, a: Any, b: Any) -> Any:
+        """Similitud coseno entre dos vectores `jnp.ndarray` 1-D."""
+        import jax.numpy as jnp
+
+        denom = (jnp.linalg.norm(a) * jnp.linalg.norm(b)).clip(min=1e-8)
+        return jnp.dot(a, b) / denom
 
     def finalize(self) -> dict[str, Any]:
         """
@@ -152,7 +162,7 @@ class NightsMetricsCalculator(BaseMetricCalculator):
     ) -> NightsTorchDatasetLoader:
         """Carga dataset Nights."""
         match self._backend:
-            case BackendEnum.TORCH:
+            case BackendEnum.TORCH | BackendEnum.JAX:
                 return NightsTorchDatasetLoader(
                     batch_size=32,
                     shuffle=False,
@@ -160,8 +170,6 @@ class NightsMetricsCalculator(BaseMetricCalculator):
                     transform=transform,
                     dataset_path=self._dataset_path,
                 )
-            case BackendEnum.JAX:
-                raise ValueError(f"Backend {self._backend} not supported")
             case _:
                 raise ValueError(f"Backend {self._backend} not supported")
 

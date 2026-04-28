@@ -3,6 +3,11 @@ from functools import lru_cache
 import timm
 
 from .base import BaseModelAdapter
+from .jax.adapter import GOOGLE_MODEL_PREFIX, DynamicGoogleViTAdapter
+from .jax.augreg_index import (
+    GOOGLE_AUGREG_INDEX_URL,
+    list_available_google_models,
+)
 from .vit_b16 import DynamicTimmModelAdapter, ViT_B_16, ViT_B_32, ViT_H_14, ViT_L_14
 
 TIMM_MODEL_PREFIX = "timm::"
@@ -29,6 +34,10 @@ def list_supported_model_options() -> list[str]:
         f"{TIMM_MODEL_PREFIX}{model_name}"
         for model_name in list_available_timm_models()
     )
+    options.extend(
+        f"{GOOGLE_MODEL_PREFIX}{model_name}"
+        for model_name in list_available_google_models()
+    )
     return options
 
 
@@ -45,6 +54,16 @@ def validate_model_name(model_name: str) -> None:
             f"{', '.join(f'{TIMM_MODEL_PREFIX}{name}' for name in list_available_timm_models())}"
         )
 
+    if model_name.startswith(GOOGLE_MODEL_PREFIX):
+        google_model_name = model_name[len(GOOGLE_MODEL_PREFIX) :]
+        if google_model_name in set(list_available_google_models()):
+            return
+        count = len(list_available_google_models())
+        raise ValueError(
+            f"Model {model_name} not supported. AugReg index has {count} valid "
+            f"filenames; see {GOOGLE_AUGREG_INDEX_URL}"
+        )
+
     raise ValueError(
         f"Model {model_name} not supported. Valid options: {', '.join(list_internal_model_names())}"
     )
@@ -54,5 +73,10 @@ def resolve_model(model_name: str) -> BaseModelAdapter:
     validate_model_name(model_name)
     if model_name in INTERNAL_MODEL_FACTORIES:
         return INTERNAL_MODEL_FACTORIES[model_name]()
-    timm_model_name = model_name[len(TIMM_MODEL_PREFIX) :]
-    return DynamicTimmModelAdapter(timm_model_name)
+    if model_name.startswith(TIMM_MODEL_PREFIX):
+        timm_model_name = model_name[len(TIMM_MODEL_PREFIX) :]
+        return DynamicTimmModelAdapter(timm_model_name)
+    if model_name.startswith(GOOGLE_MODEL_PREFIX):
+        google_model_name = model_name[len(GOOGLE_MODEL_PREFIX) :]
+        return DynamicGoogleViTAdapter(google_model_name)
+    raise ValueError(f"Model {model_name} not supported")
