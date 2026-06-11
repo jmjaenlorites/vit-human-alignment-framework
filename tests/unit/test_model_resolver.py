@@ -2,6 +2,7 @@ import pytest
 
 from src.models.resolver import (
     DynamicTimmModelAdapter,
+    SALIENCY_BASELINE_MODEL_PREFIX,
     TIMM_MODEL_PREFIX,
     TIMM_RANDOM_MODEL_PREFIX,
     TIMM_UNTRAINED_MODEL_PREFIX,
@@ -10,6 +11,7 @@ from src.models.resolver import (
     resolve_model,
     validate_model_name,
 )
+from src.models.saliency_baseline import SaliencyBaselineModelAdapter
 
 
 def test_list_available_timm_models_includes_pretrained_tags(monkeypatch) -> None:
@@ -56,6 +58,16 @@ def test_validate_model_name_accepts_internal_alias() -> None:
     validate_model_name("vit-b16")
 
 
+def test_validate_model_name_accepts_saliency_baselines() -> None:
+    validate_model_name(f"{SALIENCY_BASELINE_MODEL_PREFIX}uniform")
+    validate_model_name(f"{SALIENCY_BASELINE_MODEL_PREFIX}center-gaussian")
+
+
+def test_validate_model_name_rejects_unknown_saliency_baseline() -> None:
+    with pytest.raises(ValueError, match="uniform.*center-gaussian"):
+        validate_model_name(f"{SALIENCY_BASELINE_MODEL_PREFIX}unknown")
+
+
 def test_validate_model_name_rejects_unknown_timm_pretrained_tag(monkeypatch) -> None:
     list_available_timm_models.cache_clear()
     monkeypatch.setattr(
@@ -86,6 +98,8 @@ def test_list_supported_model_options_includes_internal_and_timm_models(
         "vit-b32",
         "vit-h14",
         "vit-l14",
+        f"{SALIENCY_BASELINE_MODEL_PREFIX}uniform",
+        f"{SALIENCY_BASELINE_MODEL_PREFIX}center-gaussian",
         f"{TIMM_MODEL_PREFIX}vit_base_patch16_224",
         f"{TIMM_MODEL_PREFIX}vit_base_patch16_224.mae",
         f"{TIMM_RANDOM_MODEL_PREFIX}vit_base_patch16_224",
@@ -115,6 +129,14 @@ def test_resolve_model_returns_dynamic_adapter_for_timm_pretrained_tag(
 
     assert isinstance(model, DynamicTimmModelAdapter)
     assert captured["timm_model_name"] == "vit_base_patch16_224.mae"
+
+
+@pytest.mark.parametrize("baseline_name", ["uniform", "center-gaussian"])
+def test_resolve_model_returns_saliency_baseline_adapter(baseline_name: str) -> None:
+    model = resolve_model(f"{SALIENCY_BASELINE_MODEL_PREFIX}{baseline_name}")
+
+    assert isinstance(model, SaliencyBaselineModelAdapter)
+    assert model.name == f"{SALIENCY_BASELINE_MODEL_PREFIX}{baseline_name}"
 
 
 def test_resolve_model_forces_random_initialization_for_random_timm_prefix(

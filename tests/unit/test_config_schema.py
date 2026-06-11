@@ -15,6 +15,7 @@ def test_metric_spec_exposes_family_and_allowed_keys() -> None:
         "levels_path",
         "imagenet_path",
         "batch_size",
+        "representation_pooling",
     }
 
 
@@ -22,14 +23,23 @@ def test_saliency_metric_spec_allows_json_config_keys() -> None:
     metric_spec = get_metric_spec("saliency_auc_judd")
 
     assert metric_spec.family == "saliency"
-    assert metric_spec.allowed_keys == {"dataset_path", "batch_size"}
+    assert metric_spec.allowed_keys == {
+        "dataset_path",
+        "batch_size",
+        "head_fusion",
+        "discard_ratio",
+    }
 
 
 def test_things_metric_spec_exposes_family_and_allowed_keys() -> None:
     metric_spec = get_metric_spec("things_triplet_accuracy")
 
     assert metric_spec.family == "things"
-    assert metric_spec.allowed_keys == {"dataset_path", "batch_size"}
+    assert metric_spec.allowed_keys == {
+        "dataset_path",
+        "batch_size",
+        "representation_pooling",
+    }
 
 
 def test_dataset_default_groups_match_metric_families() -> None:

@@ -178,6 +178,88 @@ def test_json_source_merges_saliency_dataset_defaults(tmp_path) -> None:
     }
 
 
+def test_json_source_accepts_rollout_and_pooling_options(tmp_path) -> None:
+    config_path = tmp_path / "experiments.json"
+    config_path.write_text(
+        json.dumps(
+            {
+                "models": ["vit-b16"],
+                "experiments": [
+                    {
+                        "experiment_id": "saliency-rollout",
+                        "metric": "saliency_auc_judd",
+                        "config": {
+                            "head_fusion": "mean",
+                            "discard_ratio": 0.0,
+                        },
+                    },
+                    {
+                        "experiment_id": "tid-cls",
+                        "metric": "tid_spearman_mos",
+                        "config": {
+                            "representation_pooling": "cls",
+                        },
+                    },
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    experiments = JSONExperimentSource(str(config_path)).load()
+
+    assert experiments[0].config == {
+        "head_fusion": "mean",
+        "discard_ratio": 0.0,
+    }
+    assert experiments[1].config == {"representation_pooling": "cls"}
+
+
+def test_json_source_rejects_invalid_rollout_and_pooling_options(tmp_path) -> None:
+    config_path = tmp_path / "experiments.json"
+    config_path.write_text(
+        json.dumps(
+            {
+                "models": ["vit-b16"],
+                "experiments": [
+                    {
+                        "experiment_id": "tid-bad-pooling",
+                        "metric": "tid_spearman_mos",
+                        "config": {
+                            "representation_pooling": "token-soup",
+                        },
+                    },
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="representation_pooling"):
+        JSONExperimentSource(str(config_path)).load()
+
+    config_path.write_text(
+        json.dumps(
+            {
+                "models": ["vit-b16"],
+                "experiments": [
+                    {
+                        "experiment_id": "saliency-bad-discard",
+                        "metric": "saliency_auc_judd",
+                        "config": {
+                            "discard_ratio": 1.0,
+                        },
+                    },
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="discard_ratio"):
+        JSONExperimentSource(str(config_path)).load()
+
+
 def test_json_source_rejects_unknown_dataset_defaults_group(tmp_path) -> None:
     config_path = tmp_path / "experiments.json"
     config_path.write_text(

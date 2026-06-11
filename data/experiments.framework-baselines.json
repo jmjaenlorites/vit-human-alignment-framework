@@ -2,7 +2,7 @@
   "defaults": {},
   "dataset_defaults": {
     "levels": {
-      "batch_size": 8
+      "batch_size": 32
     },
     "visturing": {
       "batch_size": 8,
@@ -10,10 +10,10 @@
       "gt_path": "tests/data/visturing"
     },
     "tid": {
-      "batch_size": 8
+      "batch_size": 32
     },
     "nights": {
-      "batch_size": 8
+      "batch_size": 32
     },
     "things": {
       "batch_size": 8
@@ -69,4 +69,3 @@
     }
   ]
 }
-

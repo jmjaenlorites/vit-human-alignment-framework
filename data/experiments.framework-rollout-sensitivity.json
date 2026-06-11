@@ -1,0 +1,45 @@
+{
+  "defaults": {},
+  "dataset_defaults": {
+    "saliency": {
+      "batch_size": 8
+    }
+  },
+  "models": [
+    "timm::vit_base_patch16_224.augreg_in1k"
+  ],
+  "experiments": [
+    {
+      "experiment_id": "saliency-auc-rollout-max-discard095",
+      "metric": "saliency_auc_judd",
+      "config": {
+        "head_fusion": "max",
+        "discard_ratio": 0.95
+      }
+    },
+    {
+      "experiment_id": "saliency-auc-rollout-max-discard000",
+      "metric": "saliency_auc_judd",
+      "config": {
+        "head_fusion": "max",
+        "discard_ratio": 0.0
+      }
+    },
+    {
+      "experiment_id": "saliency-auc-rollout-mean-discard095",
+      "metric": "saliency_auc_judd",
+      "config": {
+        "head_fusion": "mean",
+        "discard_ratio": 0.95
+      }
+    },
+    {
+      "experiment_id": "saliency-auc-rollout-mean-discard000",
+      "metric": "saliency_auc_judd",
+      "config": {
+        "head_fusion": "mean",
+        "discard_ratio": 0.0
+      }
+    }
+  ]
+}

@@ -285,12 +285,21 @@ def test_run_metric_experiment_passes_levels_configuration(monkeypatch) -> None:
             "split": "class_border",
             "levels_path": "/tmp/levels",
             "imagenet_path": "/tmp/imagenet",
+            "batch_size": 5,
         },
     )
     captured_kwargs = {}
 
     class FakeLevelsCalculator:
-        def __init__(self, backend, split, metrics, levels_path, imagenet_path):
+        def __init__(
+            self,
+            backend,
+            split,
+            metrics,
+            levels_path,
+            imagenet_path,
+            batch_size,
+        ):
             captured_kwargs.update(
                 {
                     "backend": backend,
@@ -298,6 +307,7 @@ def test_run_metric_experiment_passes_levels_configuration(monkeypatch) -> None:
                     "metrics": metrics,
                     "levels_path": levels_path,
                     "imagenet_path": imagenet_path,
+                    "batch_size": batch_size,
                 }
             )
 
@@ -313,7 +323,90 @@ def test_run_metric_experiment_passes_levels_configuration(monkeypatch) -> None:
     assert captured_kwargs["split"] == "class_border"
     assert captured_kwargs["levels_path"] == "/tmp/levels"
     assert captured_kwargs["imagenet_path"] == "/tmp/imagenet"
+    assert captured_kwargs["batch_size"] == 5
     assert captured_kwargs["metrics"][0].name == "levels_triplet_accuracy"
+
+
+def test_run_metric_experiment_passes_tid_configuration(monkeypatch) -> None:
+    runner = Runner(json_path="experiments.json", results_path="results.csv")
+    model = SimpleNamespace(backend=runner.backend, transform=lambda batch: batch)
+    experiment = ResolvedExperiment.from_parts(
+        experiment_id="tid-spearman",
+        metric_name="tid_spearman_mos",
+        model_name="vit-b16",
+        config={
+            "dataset_path": "/tmp/tid",
+            "batch_size": 6,
+            "representation_pooling": "cls",
+        },
+    )
+    captured_kwargs = {}
+
+    class FakeTIDCalculator:
+        def __init__(self, backend, metrics, dataset_path, batch_size):
+            captured_kwargs.update(
+                {
+                    "backend": backend,
+                    "metrics": metrics,
+                    "dataset_path": dataset_path,
+                    "batch_size": batch_size,
+                }
+            )
+
+        def run(self, loaded_model):
+            assert loaded_model is model
+            return {"tid_spearman_mos": "[0.7]"}
+
+    monkeypatch.setattr("src.runner.base.TIDMetricsCalculator", FakeTIDCalculator)
+
+    result = runner._run_metric_experiment(experiment, model)
+
+    assert result == "[0.7]"
+    assert captured_kwargs["backend"] == runner.backend
+    assert captured_kwargs["dataset_path"] == "/tmp/tid"
+    assert captured_kwargs["batch_size"] == 6
+    assert captured_kwargs["metrics"][0].name == "tid_spearman_mos"
+    assert captured_kwargs["metrics"][0].representation_pooling == "cls"
+
+
+def test_run_metric_experiment_passes_nights_configuration(monkeypatch) -> None:
+    runner = Runner(json_path="experiments.json", results_path="results.csv")
+    model = SimpleNamespace(backend=runner.backend, transform=lambda batch: batch)
+    experiment = ResolvedExperiment.from_parts(
+        experiment_id="nights-preference",
+        metric_name="nights_preference_accuracy",
+        model_name="vit-b16",
+        config={
+            "dataset_path": "/tmp/nights",
+            "batch_size": 9,
+        },
+    )
+    captured_kwargs = {}
+
+    class FakeNightsCalculator:
+        def __init__(self, backend, metrics, dataset_path, batch_size):
+            captured_kwargs.update(
+                {
+                    "backend": backend,
+                    "metrics": metrics,
+                    "dataset_path": dataset_path,
+                    "batch_size": batch_size,
+                }
+            )
+
+        def run(self, loaded_model):
+            assert loaded_model is model
+            return {"nights_preference_accuracy": "[0.6]"}
+
+    monkeypatch.setattr("src.runner.base.NightsMetricsCalculator", FakeNightsCalculator)
+
+    result = runner._run_metric_experiment(experiment, model)
+
+    assert result == "[0.6]"
+    assert captured_kwargs["backend"] == runner.backend
+    assert captured_kwargs["dataset_path"] == "/tmp/nights"
+    assert captured_kwargs["batch_size"] == 9
+    assert captured_kwargs["metrics"][0].name == "nights_preference_accuracy"
 
 
 def test_run_metric_experiment_passes_visturing_configuration(monkeypatch) -> None:
@@ -366,7 +459,12 @@ def test_run_metric_experiment_passes_visturing_configuration(monkeypatch) -> No
 
 def test_run_metric_experiment_passes_saliency_configuration(monkeypatch) -> None:
     runner = Runner(json_path="experiments.json", results_path="results.csv")
-    model = SimpleNamespace(backend=runner.backend, transform=lambda batch: batch)
+    model = SimpleNamespace(
+        backend=runner.backend,
+        transform=lambda batch: batch,
+        head_fusion="max",
+        discard_ratio=0.95,
+    )
     experiment = ResolvedExperiment.from_parts(
         experiment_id="saliency-auc",
         metric_name="saliency_auc_judd",
@@ -374,6 +472,8 @@ def test_run_metric_experiment_passes_saliency_configuration(monkeypatch) -> Non
         config={
             "dataset_path": "/tmp/mit1003",
             "batch_size": 4,
+            "head_fusion": "mean",
+            "discard_ratio": 0.0,
         },
     )
     captured_kwargs = {}
@@ -406,6 +506,8 @@ def test_run_metric_experiment_passes_saliency_configuration(monkeypatch) -> Non
     result = runner._run_metric_experiment(experiment, model)
 
     assert result == "[0.8]"
+    assert model.head_fusion == "mean"
+    assert model.discard_ratio == 0.0
     assert captured_kwargs["backend"] == runner.backend
     assert captured_kwargs["dataset_path"] == "/tmp/mit1003"
     assert captured_kwargs["batch_size"] == 4

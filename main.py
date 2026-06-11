@@ -53,10 +53,12 @@ def main() -> None:
         "VIT_ALIGNMENT_RESULTS_PATH",
         "results-model-battery.csv",
     )
+    unit_results_dir = os.environ.get("VIT_ALIGNMENT_UNIT_RESULTS_DIR")
     try:
         runner = Runner(
             json_path=json_path,
             results_path=results_path,
+            unit_results_dir=unit_results_dir,
         )
         runner.execute()
     except Exception:

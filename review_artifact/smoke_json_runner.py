@@ -43,6 +43,8 @@ FAKE_RESULTS = {
 class SmokeSummary:
     results_path: Path
     normalized_path: Path
+    unit_results_dir: Path
+    unit_result_files: int
     first_pass_model_loads: int
     first_pass_metric_runs: int
     second_pass_model_loads: int
@@ -55,9 +57,14 @@ class SmokeRunner(Runner):
         *,
         json_path: str,
         results_path: str,
+        unit_results_dir: str,
         metric_runs: list[str],
     ):
-        super().__init__(json_path=json_path, results_path=results_path)
+        super().__init__(
+            json_path=json_path,
+            results_path=results_path,
+            unit_results_dir=unit_results_dir,
+        )
         self.metric_runs = metric_runs
 
     def _run_metric_experiment(self, experiment, model):
@@ -66,6 +73,18 @@ class SmokeRunner(Runner):
                 f"Loaded fake model {model.name!r} for {experiment.model_name!r}"
             )
         self.metric_runs.append(experiment.run_key)
+        self.unit_results_writer.write(
+            experiment,
+            [
+                {
+                    "layer_index": 0,
+                    "unit_index": 0,
+                    "unit_value": 1.0,
+                    "human_value": 1.0,
+                    "is_correct": 1,
+                }
+            ],
+        )
         try:
             return FAKE_RESULTS[experiment.experiment_id]
         except KeyError as exc:
@@ -82,6 +101,7 @@ def run_smoke(
     config_path: Path = DEFAULT_CONFIG_PATH,
     results_path: Path | None = None,
     normalized_path: Path | None = None,
+    unit_results_dir: Path | None = None,
     expected_path: Path = EXPECTED_RESULTS_PATH,
     overwrite: bool = False,
     assert_expected: bool = True,
@@ -104,13 +124,27 @@ def run_smoke(
     else:
         normalized_path = normalized_path.resolve()
 
+    if unit_results_dir is None:
+        unit_results_dir = results_path.parent / "unit_results"
+    else:
+        unit_results_dir = unit_results_dir.resolve()
+
     config_path = config_path.resolve()
     expected_path = expected_path.resolve()
     results_path.parent.mkdir(parents=True, exist_ok=True)
     normalized_path.parent.mkdir(parents=True, exist_ok=True)
+    unit_results_dir.mkdir(parents=True, exist_ok=True)
 
-    first_model_loads, first_metric_runs = _execute_once(config_path, results_path)
-    second_model_loads, second_metric_runs = _execute_once(config_path, results_path)
+    first_model_loads, first_metric_runs = _execute_once(
+        config_path,
+        results_path,
+        unit_results_dir,
+    )
+    second_model_loads, second_metric_runs = _execute_once(
+        config_path,
+        results_path,
+        unit_results_dir,
+    )
 
     write_stable_csv(results_path, normalized_path)
     if assert_expected:
@@ -125,9 +159,17 @@ def run_smoke(
     if second_metric_runs:
         raise AssertionError(f"Resume pass ran metrics: {second_metric_runs}")
 
+    unit_result_files = len(list(unit_results_dir.glob("*.csv")))
+    if unit_result_files != len(FAKE_RESULTS):
+        raise AssertionError(
+            f"Unexpected unit-result sidecars in smoke: {unit_result_files}"
+        )
+
     return SmokeSummary(
         results_path=results_path,
         normalized_path=normalized_path,
+        unit_results_dir=unit_results_dir,
+        unit_result_files=unit_result_files,
         first_pass_model_loads=len(first_model_loads),
         first_pass_metric_runs=len(first_metric_runs),
         second_pass_model_loads=len(second_model_loads),
@@ -135,7 +177,11 @@ def run_smoke(
     )
 
 
-def _execute_once(config_path: Path, results_path: Path) -> tuple[list[str], list[str]]:
+def _execute_once(
+    config_path: Path,
+    results_path: Path,
+    unit_results_dir: Path,
+) -> tuple[list[str], list[str]]:
     model_loads: list[str] = []
     metric_runs: list[str] = []
 
@@ -151,6 +197,7 @@ def _execute_once(config_path: Path, results_path: Path) -> tuple[list[str], lis
     runner = SmokeRunner(
         json_path=str(config_path),
         results_path=str(results_path),
+        unit_results_dir=str(unit_results_dir),
         metric_runs=metric_runs,
     )
     with patch("src.runner.base.resolve_model", fake_resolve_model):
@@ -209,6 +256,12 @@ def parse_args() -> argparse.Namespace:
         help="Optional stable-column CSV output path.",
     )
     parser.add_argument(
+        "--unit-results-dir",
+        type=Path,
+        default=None,
+        help="Optional per-unit sidecar output directory.",
+    )
+    parser.add_argument(
         "--expected",
         type=Path,
         default=EXPECTED_RESULTS_PATH,
@@ -233,6 +286,7 @@ def main() -> None:
         config_path=args.config,
         results_path=args.results,
         normalized_path=args.normalized,
+        unit_results_dir=args.unit_results_dir,
         expected_path=args.expected,
         overwrite=args.overwrite,
         assert_expected=not args.no_assert_expected,
@@ -241,6 +295,7 @@ def main() -> None:
     print(f"  config: {args.config}")
     print(f"  results: {summary.results_path}")
     print(f"  normalized: {summary.normalized_path}")
+    print(f"  unit sidecars: {summary.unit_results_dir} ({summary.unit_result_files})")
     print(
         "  first pass: loaded fake model "
         f"{summary.first_pass_model_loads} time(s), ran "

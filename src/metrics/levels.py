@@ -8,6 +8,7 @@ from ..dataset_loaders.levels import LevelsTorchDatasetLoader
 from ..models.base import BaseModelAdapter, ForwardOutputs
 from ..utils.common_enums import BackendEnum
 from .base import BaseMetric, BaseMetricCalculator
+from .representation import RepresentationPooling, representation_vector
 
 
 class BaseLevelsMetric(BaseMetric):
@@ -30,7 +31,11 @@ class TripletAccuracy(BaseLevelsMetric):
         super().__init__(backend)
         # Almacenar resultados por capa
         self.correct_per_layer: list[int] = []
+        self.correct_values_per_layer: list[list[int]] = []
+        self.prediction_values_per_layer: list[list[str]] = []
+        self.human_values_per_layer: list[list[str]] = []
         self.total: int = 0
+        self.representation_pooling: RepresentationPooling = "flatten"
 
     def calculate(self, batch: Any, batch_results: ForwardOutputs) -> None:
         """
@@ -55,6 +60,9 @@ class TripletAccuracy(BaseLevelsMetric):
         # Inicializar contadores si es la primera vez
         if len(self.correct_per_layer) == 0:
             self.correct_per_layer = [0] * num_layers
+            self.correct_values_per_layer = [[] for _ in range(num_layers)]
+            self.prediction_values_per_layer = [[] for _ in range(num_layers)]
+            self.human_values_per_layer = [[] for _ in range(num_layers)]
 
         # Procesar cada elemento del batch
         for i in range(batch_size):
@@ -62,9 +70,18 @@ class TripletAccuracy(BaseLevelsMetric):
 
             # Para cada capa, calcular similitudes y verificar predicción
             for layer_idx in range(num_layers):
-                feat1 = features_img1[layer_idx][i].flatten()
-                feat2 = features_img2[layer_idx][i].flatten()
-                feat3 = features_img3[layer_idx][i].flatten()
+                feat1 = representation_vector(
+                    features_img1[layer_idx][i],
+                    self.representation_pooling,
+                )
+                feat2 = representation_vector(
+                    features_img2[layer_idx][i],
+                    self.representation_pooling,
+                )
+                feat3 = representation_vector(
+                    features_img3[layer_idx][i],
+                    self.representation_pooling,
+                )
 
                 # Calcular similitudes coseno entre pares
                 if self._backend == BackendEnum.TORCH:
@@ -106,29 +123,31 @@ class TripletAccuracy(BaseLevelsMetric):
                     else os.path.basename(self.get_image_path(batch, i, 2))
                 )
 
-                # Verificar predicción
-                is_correct = False
-                if (
-                    (sim_13 > sim_12)
-                    and (sim_13 > sim_23)
-                    and (selected_filename == img2_name)
-                ):
-                    is_correct = True
-                elif (
-                    (sim_23 > sim_12)
-                    and (sim_23 > sim_13)
-                    and (selected_filename == img1_name)
-                ):
-                    is_correct = True
-                elif (
-                    (sim_12 > sim_13)
-                    and (sim_12 > sim_23)
-                    and (selected_filename == img3_name)
-                ):
-                    is_correct = True
+                if (sim_13 > sim_12) and (sim_13 > sim_23):
+                    prediction = "img2"
+                elif (sim_23 > sim_12) and (sim_23 > sim_13):
+                    prediction = "img1"
+                elif (sim_12 > sim_13) and (sim_12 > sim_23):
+                    prediction = "img3"
+                else:
+                    prediction = "tie"
+
+                if selected_filename == img1_name:
+                    human_choice = "img1"
+                elif selected_filename == img2_name:
+                    human_choice = "img2"
+                elif selected_filename == img3_name:
+                    human_choice = "img3"
+                else:
+                    human_choice = str(selected_filename)
+
+                is_correct = prediction == human_choice
 
                 if is_correct:
                     self.correct_per_layer[layer_idx] += 1
+                self.correct_values_per_layer[layer_idx].append(int(is_correct))
+                self.prediction_values_per_layer[layer_idx].append(prediction)
+                self.human_values_per_layer[layer_idx].append(human_choice)
 
     def _cosine_similarity_torch(
         self, a: torch.Tensor, b: torch.Tensor
@@ -173,7 +192,28 @@ class TripletAccuracy(BaseLevelsMetric):
     def reset(self) -> None:
         """Reinicia el estado de la métrica."""
         self.correct_per_layer = []
+        self.correct_values_per_layer = []
+        self.prediction_values_per_layer = []
+        self.human_values_per_layer = []
         self.total = 0
+
+    def unit_records(self) -> list[dict[str, Any]]:
+        records = []
+        for layer_idx, values in enumerate(self.correct_values_per_layer):
+            for unit_idx, value in enumerate(values):
+                prediction = self.prediction_values_per_layer[layer_idx][unit_idx]
+                human_value = self.human_values_per_layer[layer_idx][unit_idx]
+                records.append(
+                    {
+                        "layer_index": layer_idx,
+                        "unit_index": unit_idx,
+                        "unit_value": value,
+                        "human_value": human_value,
+                        "prediction": prediction,
+                        "is_correct": value,
+                    }
+                )
+        return records
 
 
 class LevelsMetricsCalculator(BaseMetricCalculator):
@@ -191,6 +231,7 @@ class LevelsMetricsCalculator(BaseMetricCalculator):
         metrics: Optional[list[BaseLevelsMetric]] = None,
         levels_path: Optional[str] = None,
         imagenet_path: Optional[str] = None,
+        batch_size: int = 32,
     ):
         self.name = f"LevelsMetricsCalculator_{split}"
         self._metrics: list[BaseLevelsMetric] = metrics or [TripletAccuracy(backend)]
@@ -200,6 +241,7 @@ class LevelsMetricsCalculator(BaseMetricCalculator):
         self.split = split
         self._levels_path = levels_path
         self._imagenet_path = imagenet_path
+        self._batch_size = batch_size
 
     def get_dataset_loader(
         self, transform: Optional[Callable[[Any], Any]] = None
@@ -213,7 +255,7 @@ class LevelsMetricsCalculator(BaseMetricCalculator):
         match self._backend:
             case BackendEnum.TORCH | BackendEnum.JAX:
                 return LevelsTorchDatasetLoader(
-                    batch_size=32,
+                    batch_size=self._batch_size,
                     shuffle=False,
                     num_workers=num_workers,
                     split=self.split,

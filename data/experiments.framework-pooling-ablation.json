@@ -1,0 +1,58 @@
+{
+  "defaults": {},
+  "dataset_defaults": {
+    "tid": {
+      "batch_size": 32
+    },
+    "things": {
+      "batch_size": 8
+    }
+  },
+  "models": [
+    "timm::vit_base_patch16_224.augreg_in1k"
+  ],
+  "experiments": [
+    {
+      "experiment_id": "tid-spearman-mos-pooling-flatten",
+      "metric": "tid_spearman_mos",
+      "config": {
+        "representation_pooling": "flatten"
+      }
+    },
+    {
+      "experiment_id": "tid-spearman-mos-pooling-cls",
+      "metric": "tid_spearman_mos",
+      "config": {
+        "representation_pooling": "cls"
+      }
+    },
+    {
+      "experiment_id": "tid-spearman-mos-pooling-mean-patch",
+      "metric": "tid_spearman_mos",
+      "config": {
+        "representation_pooling": "mean_patch"
+      }
+    },
+    {
+      "experiment_id": "things-triplet-accuracy-pooling-flatten",
+      "metric": "things_triplet_accuracy",
+      "config": {
+        "representation_pooling": "flatten"
+      }
+    },
+    {
+      "experiment_id": "things-triplet-accuracy-pooling-cls",
+      "metric": "things_triplet_accuracy",
+      "config": {
+        "representation_pooling": "cls"
+      }
+    },
+    {
+      "experiment_id": "things-triplet-accuracy-pooling-mean-patch",
+      "metric": "things_triplet_accuracy",
+      "config": {
+        "representation_pooling": "mean_patch"
+      }
+    }
+  ]
+}

@@ -29,6 +29,7 @@ from .config_schema import get_metric_spec
 from .json_source import JSONExperimentSource
 from .results_store import ResultsStore
 from .types import ResolvedExperiment
+from .unit_results import UnitResultsWriter
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +41,7 @@ class Runner:
         json_path: Optional[str] = None,
         output_path: Optional[str] = None,
         results_path: Optional[str] = None,
+        unit_results_dir: Optional[str] = None,
         backend: BackendEnum = BackendEnum.TORCH,
     ):
         # NOTE: `backend` se conserva por retrocompatibilidad de la firma. Los
@@ -49,6 +51,7 @@ class Runner:
         self.json_path = json_path
         self.output_path = output_path
         self.results_path = results_path
+        self.unit_results_writer = UnitResultsWriter(unit_results_dir)
         self.backend = backend
 
     def load_experiment_specs(self) -> tuple[List[ExperimentSpec], pd.DataFrame]:
@@ -418,23 +421,30 @@ class Runner:
             return self._run_visturing_metric(experiment, model)
 
         metric = load_metric(experiment.metric_name)(model.backend)
+        self._configure_metric(metric, experiment.config)
 
         if metric_spec.family == "saliency":
+            self._configure_saliency_model(model, experiment.config)
             calculator = SaliencyMetricsCalculator(
                 model.backend,
                 [metric],
                 dataset_path=experiment.config.get("dataset_path"),
                 batch_size=experiment.config.get("batch_size", 32),
             )
-            return calculator.run(model)[metric.name]
+            results = calculator.run(model)
+            self._write_unit_results(experiment, metric)
+            return results[metric.name]
 
         if metric_spec.family == "tid":
             calculator = TIDMetricsCalculator(
                 model.backend,
                 metrics=[metric],
                 dataset_path=experiment.config.get("dataset_path"),
+                batch_size=experiment.config.get("batch_size", 32),
             )
-            return calculator.run(model)[metric.name]
+            results = calculator.run(model)
+            self._write_unit_results(experiment, metric)
+            return results[metric.name]
 
         if metric_spec.family == "levels":
             calculator = LevelsMetricsCalculator(
@@ -443,16 +453,22 @@ class Runner:
                 metrics=[metric],
                 levels_path=experiment.config.get("levels_path"),
                 imagenet_path=experiment.config.get("imagenet_path"),
+                batch_size=experiment.config.get("batch_size", 32),
             )
-            return calculator.run(model)[metric.name]
+            results = calculator.run(model)
+            self._write_unit_results(experiment, metric)
+            return results[metric.name]
 
         if metric_spec.family == "nights":
             calculator = NightsMetricsCalculator(
                 model.backend,
                 metrics=[metric],
                 dataset_path=experiment.config.get("dataset_path"),
+                batch_size=experiment.config.get("batch_size", 32),
             )
-            return calculator.run(model)[metric.name]
+            results = calculator.run(model)
+            self._write_unit_results(experiment, metric)
+            return results[metric.name]
 
         if metric_spec.family == "things":
             calculator = ThingsMetricsCalculator(
@@ -461,9 +477,34 @@ class Runner:
                 dataset_path=experiment.config.get("dataset_path"),
                 batch_size=experiment.config.get("batch_size", 32),
             )
-            return calculator.run(model)[metric.name]
+            results = calculator.run(model)
+            self._write_unit_results(experiment, metric)
+            return results[metric.name]
 
         raise ValueError(f"Metric {experiment.metric_name} not supported")
+
+    def _configure_metric(self, metric: BaseMetric, config: dict[str, Any]) -> None:
+        representation_pooling = config.get("representation_pooling")
+        if representation_pooling and hasattr(metric, "representation_pooling"):
+            setattr(metric, "representation_pooling", representation_pooling)
+
+    def _configure_saliency_model(self, model: Any, config: dict[str, Any]) -> None:
+        if "head_fusion" in config and hasattr(model, "head_fusion"):
+            model.head_fusion = config["head_fusion"]
+        if "discard_ratio" in config and hasattr(model, "discard_ratio"):
+            model.discard_ratio = float(config["discard_ratio"])
+
+    def _write_unit_results(
+        self,
+        experiment: ResolvedExperiment,
+        metric: BaseMetric,
+    ) -> None:
+        if not self.unit_results_writer.enabled:
+            return
+        unit_records = getattr(metric, "unit_records", None)
+        if unit_records is None:
+            return
+        self.unit_results_writer.write(experiment, unit_records())
 
     def _run_visturing_metric(self, experiment: ResolvedExperiment, model: Any) -> Any:
         config = experiment.config
@@ -552,7 +593,12 @@ class Runner:
         else:
             raise ValueError(f"Metric {metric_name} not supported")
 
-        return calculator.run(model)[metric_name]
+        results = calculator.run(model)
+        for metric in getattr(calculator, "_metrics", []):
+            if metric.name == metric_name:
+                self._write_unit_results(experiment, metric)
+                break
+        return results[metric_name]
 
     def _load_csv(self) -> pd.DataFrame:
         if not self.csv_path:

@@ -53,5 +53,10 @@ def validate_metric_config(metric_name: str, config: dict[str, Any]) -> None:
             raise ValueError(
                 "Invalid value for 'batch_size': must be a positive integer"
             )
+        if key == "discard_ratio":
+            if not isinstance(value, int | float) or not 0 <= value < 1:
+                raise ValueError(
+                    "Invalid value for 'discard_ratio': must be a number in [0, 1)"
+                )
         if key in PATH_FIELDS and (not isinstance(value, str) or not value):
             raise ValueError(f"Invalid value for '{key}': must be a non-empty string")

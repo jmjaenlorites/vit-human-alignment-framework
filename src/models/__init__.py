@@ -2,6 +2,7 @@ from .base import BaseModelAdapter
 from .resolver import (
     GOOGLE_MODEL_PREFIX,
     INTERNAL_MODEL_FACTORIES,
+    SALIENCY_BASELINE_MODEL_PREFIX,
     TIMM_MODEL_PREFIX,
     list_supported_model_options,
     resolve_model,
@@ -18,6 +19,7 @@ def load_model(model_name: str) -> BaseModelAdapter:
 __all__ = [
     "BaseModelAdapter",
     "GOOGLE_MODEL_PREFIX",
+    "SALIENCY_BASELINE_MODEL_PREFIX",
     "SUPPORTED_MODELS",
     "TIMM_MODEL_PREFIX",
     "list_supported_model_options",

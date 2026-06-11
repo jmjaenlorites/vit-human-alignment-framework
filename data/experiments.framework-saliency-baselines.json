@@ -1,0 +1,22 @@
+{
+  "defaults": {},
+  "dataset_defaults": {
+    "saliency": {
+      "batch_size": 8
+    }
+  },
+  "models": [
+    "saliency-baseline::uniform",
+    "saliency-baseline::center-gaussian"
+  ],
+  "experiments": [
+    {
+      "experiment_id": "saliency-auc-judd-baseline",
+      "metric": "saliency_auc_judd"
+    },
+    {
+      "experiment_id": "saliency-pearson-baseline",
+      "metric": "saliency_pearson_correlation_coefficient"
+    }
+  ]
+}

@@ -8,6 +8,12 @@ from .jax.augreg_index import (
     GOOGLE_AUGREG_INDEX_URL,
     list_available_google_models,
 )
+from .saliency_baseline import (
+    SALIENCY_BASELINE_MODEL_PREFIX,
+    SALIENCY_BASELINE_MODEL_NAMES,
+    SaliencyBaselineModelAdapter,
+    list_saliency_baseline_model_options,
+)
 from .vit_b16 import DynamicTimmModelAdapter, ViT_B_16, ViT_B_32, ViT_H_14, ViT_L_14
 
 TIMM_MODEL_PREFIX = "timm::"
@@ -36,6 +42,7 @@ def list_available_timm_models() -> list[str]:
 
 def list_supported_model_options() -> list[str]:
     options = list_internal_model_names()
+    options.extend(list_saliency_baseline_model_options())
     options.extend(
         f"{TIMM_MODEL_PREFIX}{model_name}"
         for model_name in list_available_timm_models()
@@ -58,6 +65,15 @@ def list_supported_model_options() -> list[str]:
 def validate_model_name(model_name: str) -> None:
     if model_name in INTERNAL_MODEL_FACTORIES:
         return
+
+    if model_name.startswith(SALIENCY_BASELINE_MODEL_PREFIX):
+        baseline_name = model_name[len(SALIENCY_BASELINE_MODEL_PREFIX) :]
+        if baseline_name in SALIENCY_BASELINE_MODEL_NAMES:
+            return
+        raise ValueError(
+            f"Model {model_name} not supported. Valid options: "
+            f"{', '.join(list_saliency_baseline_model_options())}"
+        )
 
     random_prefix = _matching_timm_random_prefix(model_name)
     if random_prefix:
@@ -97,6 +113,9 @@ def resolve_model(model_name: str) -> BaseModelAdapter:
     validate_model_name(model_name)
     if model_name in INTERNAL_MODEL_FACTORIES:
         return INTERNAL_MODEL_FACTORIES[model_name]()
+    if model_name.startswith(SALIENCY_BASELINE_MODEL_PREFIX):
+        baseline_name = model_name[len(SALIENCY_BASELINE_MODEL_PREFIX) :]
+        return SaliencyBaselineModelAdapter(baseline_name)
     random_prefix = _matching_timm_random_prefix(model_name)
     if random_prefix:
         timm_model_name = model_name[len(random_prefix) :]

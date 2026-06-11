@@ -18,6 +18,8 @@ def test_smoke_json_runner_persists_expected_rows_and_resumes(tmp_path) -> None:
     assert summary.first_pass_metric_runs == 2
     assert summary.second_pass_model_loads == 0
     assert summary.second_pass_metric_runs == 0
+    assert summary.unit_result_files == 2
+    assert len(list(summary.unit_results_dir.glob("*.csv"))) == 2
     assert read_stable_rows(summary.normalized_path) == read_stable_rows(
         EXPECTED_RESULTS_PATH
     )

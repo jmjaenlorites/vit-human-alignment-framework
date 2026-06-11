@@ -14,6 +14,8 @@ MASK_FREQS = {"all", "1p5", "3", "6", "12", "24"}
 MASK_CONTRASTS = {"0075", "0150", "0225", "0300"}
 MASK_ORIENTATIONS = {"0", "22p5", "45", "67p5", "90", "112p5", "135"}
 LOW_HIGH_FREQS = {"all", "low", "high"}
+REPRESENTATION_POOLING = {"flatten", "cls", "mean_patch"}
+HEAD_FUSION = {"mean", "max", "min"}
 PATH_FIELDS = {"levels_path", "imagenet_path", "data_path", "gt_path", "dataset_path"}
 DATASET_DEFAULT_GROUPS = {
     "levels",
@@ -28,28 +30,42 @@ DATASET_DEFAULT_GROUPS = {
 METRIC_SPECS: dict[str, MetricSpec] = {
     "saliency_auc_judd": MetricSpec(
         family="saliency",
-        allowed_keys={"dataset_path", "batch_size"},
+        allowed_keys={"dataset_path", "batch_size", "head_fusion", "discard_ratio"},
+        value_options={"head_fusion": HEAD_FUSION},
     ),
     "saliency_pearson_correlation_coefficient": MetricSpec(
         family="saliency",
-        allowed_keys={"dataset_path", "batch_size"},
+        allowed_keys={"dataset_path", "batch_size", "head_fusion", "discard_ratio"},
+        value_options={"head_fusion": HEAD_FUSION},
     ),
     "tid_spearman_mos": MetricSpec(
         family="tid",
-        allowed_keys={"dataset_path", "batch_size"},
+        allowed_keys={"dataset_path", "batch_size", "representation_pooling"},
+        value_options={"representation_pooling": REPRESENTATION_POOLING},
     ),
     "nights_preference_accuracy": MetricSpec(
         family="nights",
-        allowed_keys={"dataset_path", "batch_size"},
+        allowed_keys={"dataset_path", "batch_size", "representation_pooling"},
+        value_options={"representation_pooling": REPRESENTATION_POOLING},
     ),
     "levels_triplet_accuracy": MetricSpec(
         family="levels",
-        allowed_keys={"split", "levels_path", "imagenet_path", "batch_size"},
-        value_options={"split": LEVELS_SPLITS},
+        allowed_keys={
+            "split",
+            "levels_path",
+            "imagenet_path",
+            "batch_size",
+            "representation_pooling",
+        },
+        value_options={
+            "split": LEVELS_SPLITS,
+            "representation_pooling": REPRESENTATION_POOLING,
+        },
     ),
     "things_triplet_accuracy": MetricSpec(
         family="things",
-        allowed_keys={"dataset_path", "batch_size"},
+        allowed_keys={"dataset_path", "batch_size", "representation_pooling"},
+        value_options={"representation_pooling": REPRESENTATION_POOLING},
     ),
     "visturing_spectral_sensitivity": MetricSpec(
         family="visturing",

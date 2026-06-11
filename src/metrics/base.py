@@ -50,6 +50,10 @@ class BaseMetric(Protocol):
         """Reinicia el estado interno de la métrica."""
         raise NotImplementedError
 
+    def unit_records(self) -> list[dict[str, Any]]:
+        """Return optional per-unit records for bootstrap sidecars."""
+        return []
+
 
 class BaseSaliencyMetric(BaseMetric):
     type: Literal["saliency"] = "saliency"
@@ -149,6 +153,19 @@ class BaseSaliencyMetric(BaseMetric):
     def reset(self) -> None:
         """Reinicia los valores acumulados."""
         self.accumulated_values = []
+
+    def unit_records(self) -> list[dict[str, Any]]:
+        records = []
+        for layer_idx, values in enumerate(self.accumulated_values):
+            for unit_idx, value in enumerate(values):
+                records.append(
+                    {
+                        "layer_index": layer_idx,
+                        "unit_index": unit_idx,
+                        "unit_value": value,
+                    }
+                )
+        return records
 
     def _calculate_torch(
         self,

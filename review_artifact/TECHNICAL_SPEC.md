@@ -87,6 +87,42 @@ The `result` field stores one value per evaluated layer when the metric is
 layer-wise. Nested metric outputs remain JSON-serialized instead of being
 flattened into incompatible scalar columns.
 
+## Unit-level sidecars
+
+When `VIT_ALIGNMENT_UNIT_RESULTS_DIR` is defined, JSON runs also write one
+per-unit sidecar CSV per completed run. This does not change `results.csv`.
+Sidecar filenames are derived from the sanitized `run_key` and the first
+twelve characters of `config_hash`.
+
+In the review package, full sidecar directories are stored as `.tar.gz`
+archives under `review_artifact/unit_result_archives/` to keep the artifact
+compact. Extract them before recomputing bootstrap summaries.
+
+Stable sidecar columns are:
+
+| Column | Meaning |
+| --- | --- |
+| `run_key` | Same stable key used in `results.csv`. |
+| `model_name` | Exact resolver name used by the run. |
+| `experiment_id` | Stable experiment label from the JSON file. |
+| `metric_name` | Metric implementation name. |
+| `config_hash` | Effective metric-configuration hash. |
+| `layer_index` | Zero-based layer index for the unit value. |
+| `unit_index` | Zero-based unit index within that layer. |
+| `unit_value` | Per-unit score or model signal used for aggregation. |
+| `human_value` | Optional human score/target value, e.g. MOS for TID. |
+| `prediction` | Optional model prediction or condition label. |
+| `is_correct` | Optional 0/1 correctness indicator for accuracy metrics. |
+
+The sidecars are the bootstrap input. Accuracy metrics store one 0/1 record per
+trial and layer in `is_correct`; they also store the model decision in
+`prediction` and the human target in `human_value`, so null label permutations
+can be computed without rerunning the model. Saliency stores one score per image
+and layer. TID stores model similarity as `unit_value` and MOS as `human_value`,
+so Spearman can be recomputed in each bootstrap replicate. The Weber-law
+psychophysical subtest stores one condition-level model response and matching
+human value when available.
+
 ## Configuration hash
 
 `config_hash` is computed only from the effective metric configuration, not from
@@ -128,6 +164,11 @@ For saliency, `forward_saliency` returns one rollout map per requested layer,
 with shape `[batch, grid_size, grid_size]`. The maps represent accumulated
 attention from the CLS token to patch tokens.
 
+Representation metrics use `representation_pooling="flatten"` by default:
+the full `[CLS + patches]` token tensor is flattened before cosine similarity.
+The JSON contract also accepts `representation_pooling="cls"` and
+`representation_pooling="mean_patch"` for the supplementary pooling ablation.
+
 ## Attention rollout contract
 
 The timm ViT saliency path captures block attention with forward hooks and uses
@@ -135,17 +176,19 @@ the following rollout rule per layer:
 
 1. Compute scaled dot-product attention weights from the block's `qkv`
    projection in evaluation mode.
-2. Fuse heads using the configured fusion rule; the current review artifact uses
-   `max`.
-3. Optionally discard low attention entries while protecting all CLS-token rows
-   and columns.
+2. Fuse heads using the configured fusion rule; the case study uses
+   `head_fusion="max"`.
+3. Discard the lowest attention entries using `discard_ratio=0.95` while
+   protecting all CLS-token rows and columns.
 4. Add the residual identity contribution and row-normalize.
 5. Left-multiply the accumulated rollout matrix.
 6. Read the CLS-to-patch attention vector, reshape it to the patch grid, and
    normalize each map by its maximum value.
 
 This implementation follows the attention-rollout interpretation used for ViT
-saliency while keeping the exact choices explicit.
+saliency while keeping the exact choices explicit. The JSON contract also
+accepts `head_fusion="mean"` and `discard_ratio=0.0` for the supplementary
+rollout sensitivity check.
 
 ## Metric-family mappings
 
@@ -164,8 +207,7 @@ saliency while keeping the exact choices explicit.
 
 ## Bootstrap units
 
-Confidence intervals should be computed over the experimental unit, not over
-layers:
+Confidence intervals are computed over the experimental unit, not over layers:
 
 | Family | Bootstrap unit |
 | --- | --- |
@@ -176,9 +218,11 @@ layers:
 | LEVELS | triplet trial |
 | Custom psychophysics | condition or trial |
 
-The current `results.csv` contract stores aggregate layer-wise values. Future
-CI runs should persist optional per-unit outputs in a sidecar artifact, leaving
-the stable aggregate result table backward-compatible.
+The aggregate `results.csv` contract remains backward-compatible. Confidence
+intervals and null controls are computed from the optional sidecar artifacts
+rather than from the aggregate table. Best-layer intervals select the best layer
+inside each bootstrap replicate, so the reported interval includes the layer
+selection step.
 
 Chance-level controls are metric-family references rather than model outputs.
 For binary preference metrics such as NIGHTS the analytical chance level is
@@ -203,6 +247,7 @@ for each model:
         mark row running
         run dataset loader, adapter forward pass, and metric calculator
         write serialized layer-wise result as done
+        if VIT_ALIGNMENT_UNIT_RESULTS_DIR is set: write unit sidecar
         on error, write error row
     release model
 ```

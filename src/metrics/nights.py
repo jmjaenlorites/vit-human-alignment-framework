@@ -7,6 +7,7 @@ from ..dataset_loaders.nights import NightsTorchDatasetLoader
 from ..models.base import BaseModelAdapter, ForwardOutputs
 from ..utils.common_enums import BackendEnum
 from .base import BaseMetric, BaseMetricCalculator
+from .representation import RepresentationPooling, representation_vector
 
 
 class BaseNightsMetric(BaseMetric):
@@ -29,7 +30,11 @@ class PreferenceAccuracy(BaseNightsMetric):
         super().__init__(backend)
         # Almacenar resultados por capa
         self.correct_per_layer: list[int] = []
+        self.correct_values_per_layer: list[list[int]] = []
+        self.prediction_values_per_layer: list[list[str]] = []
+        self.human_values_per_layer: list[list[str]] = []
         self.total: int = 0
+        self.representation_pooling: RepresentationPooling = "flatten"
 
     def calculate(self, batch: Any, batch_results: ForwardOutputs) -> None:
         """
@@ -51,6 +56,9 @@ class PreferenceAccuracy(BaseNightsMetric):
         # Inicializar contadores si es la primera vez
         if len(self.correct_per_layer) == 0:
             self.correct_per_layer = [0] * num_layers
+            self.correct_values_per_layer = [[] for _ in range(num_layers)]
+            self.prediction_values_per_layer = [[] for _ in range(num_layers)]
+            self.human_values_per_layer = [[] for _ in range(num_layers)]
 
         # Procesar cada elemento del batch
         for i in range(batch_size):
@@ -70,9 +78,18 @@ class PreferenceAccuracy(BaseNightsMetric):
 
             # Para cada capa, calcular similitudes y verificar predicción
             for layer_idx in range(num_layers):
-                feat_ref = features_ref[layer_idx][i].flatten()
-                feat_left = features_left[layer_idx][i].flatten()
-                feat_right = features_right[layer_idx][i].flatten()
+                feat_ref = representation_vector(
+                    features_ref[layer_idx][i],
+                    self.representation_pooling,
+                )
+                feat_left = representation_vector(
+                    features_left[layer_idx][i],
+                    self.representation_pooling,
+                )
+                feat_right = representation_vector(
+                    features_right[layer_idx][i],
+                    self.representation_pooling,
+                )
 
                 # Calcular similitudes coseno entre referencia y cada distorsión
                 if self._backend == BackendEnum.TORCH:
@@ -92,14 +109,27 @@ class PreferenceAccuracy(BaseNightsMetric):
                 # Si sim_left < sim_right (right es más similar), entonces right_vote debe ser 1
                 # Si sim_left > sim_right (left es más similar), entonces left_vote debe ser 1
 
-                is_correct = False
-                if (sim_left < sim_right) and (right_vote == 1):
-                    is_correct = True
-                elif (sim_left > sim_right) and (left_vote == 1):
-                    is_correct = True
+                if sim_left < sim_right:
+                    prediction = "right"
+                elif sim_left > sim_right:
+                    prediction = "left"
+                else:
+                    prediction = "tie"
+
+                if right_vote == 1:
+                    human_choice = "right"
+                elif left_vote == 1:
+                    human_choice = "left"
+                else:
+                    human_choice = "tie"
+
+                is_correct = prediction == human_choice
 
                 if is_correct:
                     self.correct_per_layer[layer_idx] += 1
+                self.correct_values_per_layer[layer_idx].append(int(is_correct))
+                self.prediction_values_per_layer[layer_idx].append(prediction)
+                self.human_values_per_layer[layer_idx].append(human_choice)
 
     def _cosine_similarity_torch(
         self, a: torch.Tensor, b: torch.Tensor
@@ -135,7 +165,28 @@ class PreferenceAccuracy(BaseNightsMetric):
     def reset(self) -> None:
         """Reinicia el estado de la métrica."""
         self.correct_per_layer = []
+        self.correct_values_per_layer = []
+        self.prediction_values_per_layer = []
+        self.human_values_per_layer = []
         self.total = 0
+
+    def unit_records(self) -> list[dict[str, Any]]:
+        records = []
+        for layer_idx, values in enumerate(self.correct_values_per_layer):
+            for unit_idx, value in enumerate(values):
+                prediction = self.prediction_values_per_layer[layer_idx][unit_idx]
+                human_value = self.human_values_per_layer[layer_idx][unit_idx]
+                records.append(
+                    {
+                        "layer_index": layer_idx,
+                        "unit_index": unit_idx,
+                        "unit_value": value,
+                        "human_value": human_value,
+                        "prediction": prediction,
+                        "is_correct": value,
+                    }
+                )
+        return records
 
 
 class NightsMetricsCalculator(BaseMetricCalculator):
@@ -149,6 +200,7 @@ class NightsMetricsCalculator(BaseMetricCalculator):
         backend: BackendEnum,
         metrics: Optional[list[BaseNightsMetric]] = None,
         dataset_path: Optional[str] = None,
+        batch_size: int = 32,
     ):
         self.name = "NightsMetricsCalculator"
         self._metrics: list[BaseNightsMetric] = metrics or [PreferenceAccuracy(backend)]
@@ -156,6 +208,7 @@ class NightsMetricsCalculator(BaseMetricCalculator):
         self._return_saliency = False
         self._return_features = True
         self._dataset_path = dataset_path
+        self._batch_size = batch_size
 
     def get_dataset_loader(
         self, transform: Optional[Callable[[Any], Any]] = None
@@ -164,7 +217,7 @@ class NightsMetricsCalculator(BaseMetricCalculator):
         match self._backend:
             case BackendEnum.TORCH | BackendEnum.JAX:
                 return NightsTorchDatasetLoader(
-                    batch_size=32,
+                    batch_size=self._batch_size,
                     shuffle=False,
                     num_workers=0,
                     transform=transform,

@@ -36,9 +36,23 @@ Optional pytest check:
 uv run pytest review_artifact/test_smoke_json_runner.py
 ```
 
+Bootstrap summaries from unit sidecars can be generated with:
+
+```bash
+tar -xzf review_artifact/unit_result_archives/unit-results-framework-baselines-seed0-v3.tar.gz
+uv run python scripts/bootstrap_unit_results.py unit-results-framework-baselines-seed0-v3/*.csv --output-dir outputs/bootstrap-framework-baselines --include-null
+```
+
+The script uses 2000 bootstrap resamples and seed `20260611` by default. It
+selects the best layer inside each bootstrap replicate, so best-layer confidence
+intervals reflect the layer-selection step rather than only the final aggregate
+curve.
+
 The script reads `review_artifact/smoke_experiments.json`, writes a temporary
 `results.csv`, runs the JSON runner twice, and compares the stable output
-columns with `review_artifact/expected_results.csv`.
+columns with `review_artifact/expected_results.csv`. It also writes minimal
+per-unit sidecar CSVs in a temporary `unit_results/` directory, exercising the
+contract used for bootstrap confidence intervals without real benchmark data.
 
 Expected terminal output is similar to:
 
@@ -47,6 +61,7 @@ Smoke artifact OK
   config: review_artifact/smoke_experiments.json
   results: /tmp/vit-review-smoke-.../results.csv
   normalized: /tmp/vit-review-smoke-.../results.normalized.csv
+  unit sidecars: /tmp/vit-review-smoke-.../unit_results (2)
   first pass: loaded fake model 1 time(s), ran 2 metric(s)
   resume pass: loaded fake model 0 time(s), ran 0 metric(s)
   expected CSV: review_artifact/expected_results.csv
@@ -63,6 +78,7 @@ metric, status, result, error, and config hash.
 - Merge behavior for global `defaults`, family-scoped `dataset_defaults`, and
   per-experiment `config`.
 - `results.csv` creation through the real `ResultsStore`.
+- Optional per-unit sidecar creation for bootstrap inputs.
 - Resume behavior: rows already marked `done` are skipped on the second run.
 - A pytest entry point that reviewers can run without GPUs or benchmark data.
 
@@ -97,6 +113,50 @@ framework random-ViT baseline configuration:
 ssh deep.uv.es "cd ~/vit-human-alignment-framework/ && VIT_ALIGNMENT_JSON_PATH=data/experiments.framework-baselines.json VIT_ALIGNMENT_RESULTS_PATH=results-framework-baselines.csv /media/disk/users/jmjaen/.local/bin/uv run main.py"
 ```
 
+To also persist per-unit sidecars for confidence intervals and null controls:
+
+```bash
+ssh deep.uv.es "cd ~/vit-human-alignment-framework/ && VIT_ALIGNMENT_JSON_PATH=data/experiments.framework-baselines.json VIT_ALIGNMENT_RESULTS_PATH=results-framework-baselines-seed0-v3.csv VIT_ALIGNMENT_UNIT_RESULTS_DIR=unit-results-framework-baselines-seed0-v3 /media/disk/users/jmjaen/.local/bin/uv run main.py"
+```
+
+Center and uniform saliency controls are saliency-only adapters and therefore
+use a separate configuration:
+
+```bash
+ssh deep.uv.es "cd ~/vit-human-alignment-framework/ && VIT_ALIGNMENT_JSON_PATH=data/experiments.framework-saliency-baselines.json VIT_ALIGNMENT_RESULTS_PATH=results-framework-saliency-baselines.csv VIT_ALIGNMENT_UNIT_RESULTS_DIR=unit-results-framework-saliency-baselines /media/disk/users/jmjaen/.local/bin/uv run main.py"
+```
+
+The compact case-study configuration used for the framework-paper figures is:
+
+```bash
+ssh deep.uv.es "cd ~/vit-human-alignment-framework/ && VIT_ALIGNMENT_JSON_PATH=data/experiments.framework-case-study.json VIT_ALIGNMENT_RESULTS_PATH=results-framework-case-study-v2.csv VIT_ALIGNMENT_UNIT_RESULTS_DIR=unit-results-framework-case-study-v2 /media/disk/users/jmjaen/.local/bin/uv run main.py"
+```
+
+Two small supplementary sensitivity runs are also defined:
+
+```bash
+ssh deep.uv.es "cd ~/vit-human-alignment-framework/ && VIT_ALIGNMENT_JSON_PATH=data/experiments.framework-rollout-sensitivity.json VIT_ALIGNMENT_RESULTS_PATH=results-framework-rollout-sensitivity.csv VIT_ALIGNMENT_UNIT_RESULTS_DIR=unit-results-framework-rollout-sensitivity /media/disk/users/jmjaen/.local/bin/uv run main.py"
+
+ssh deep.uv.es "cd ~/vit-human-alignment-framework/ && VIT_ALIGNMENT_JSON_PATH=data/experiments.framework-pooling-ablation.json VIT_ALIGNMENT_RESULTS_PATH=results-framework-pooling-ablation.csv VIT_ALIGNMENT_UNIT_RESULTS_DIR=unit-results-framework-pooling-ablation /media/disk/users/jmjaen/.local/bin/uv run main.py"
+```
+
+The review artifact stores large unit-level sidecar directories as compressed
+archives under `review_artifact/unit_result_archives/`. Extract the archives
+before recomputing bootstrap summaries:
+
+```bash
+tar -xzf review_artifact/unit_result_archives/unit-results-framework-baselines-seed0-v3.tar.gz
+tar -xzf review_artifact/unit_result_archives/unit-results-framework-case-study-v2.tar.gz
+tar -xzf review_artifact/unit_result_archives/unit-results-framework-rollout-sensitivity.tar.gz
+tar -xzf review_artifact/unit_result_archives/unit-results-framework-pooling-ablation.tar.gz
+tar -xzf review_artifact/unit_result_archives/unit-results-framework-saliency-baselines.tar.gz
+uv run python scripts/bootstrap_unit_results.py unit-results-framework-baselines-seed0-v3/*.csv --output-dir outputs/bootstrap-framework-baselines --include-null
+uv run python scripts/bootstrap_unit_results.py unit-results-framework-case-study-v2/*.csv --output-dir outputs/bootstrap-framework-case-study --include-null
+uv run python scripts/bootstrap_unit_results.py unit-results-framework-rollout-sensitivity/*.csv --output-dir outputs/bootstrap-framework-rollout-sensitivity --include-null
+uv run python scripts/bootstrap_unit_results.py unit-results-framework-pooling-ablation/*.csv --output-dir outputs/bootstrap-framework-pooling-ablation --include-null
+uv run python scripts/framework_paper_outputs.py --case-results results-framework-case-study-v2.csv --case-bootstrap-dir outputs/bootstrap-framework-case-study --baseline-results results-framework-baselines-seed0-v3.csv --baseline-bootstrap-dir outputs/bootstrap-framework-baselines --saliency-baseline-results results-framework-saliency-baselines.csv --saliency-baseline-bootstrap-dir outputs/bootstrap-framework-saliency-baselines --rollout-results results-framework-rollout-sensitivity.csv --rollout-bootstrap-dir outputs/bootstrap-framework-rollout-sensitivity --pooling-results results-framework-pooling-ablation.csv --pooling-bootstrap-dir outputs/bootstrap-framework-pooling-ablation --output-dir outputs/framework_paper
+```
+
 The older saliency-only baseline configuration remains available as
 `data/experiments.saliency-baselines.json` because it produced the committed
 `results-saliency-baselines.csv` table used as the first framework-native
@@ -107,13 +167,10 @@ Forced-random timm baselines use a deterministic seed during model creation
 output file when comparing against results produced before that deterministic
 contract existed.
 
-The committed `results-framework-baselines-seed0.csv` contains the completed
-seeded controls for saliency AUC-Judd, TID Spearman MOS, NIGHTS preference
-accuracy, THINGS triplet accuracy, and LEVELS between-class accuracy. The same
-run hit a non-destructive `Broken pipe` error on `levels-class-border-random-vit`
-before reaching the remaining rows; those unfinished controls should be
-recomputed from `data/experiments.framework-baselines.json` before making claims
-about all baseline families.
+The committed `results-framework-baselines-seed0.csv` is retained as provenance
+for the first seeded random-ViT run, which stopped before all LEVELS splits were
+complete. Claims in the paper should use the closed sidecar-enabled `v3` output
+instead.
 
 Confirm the dataset paths and checkpoint availability on the server before
 launching any full experiment.

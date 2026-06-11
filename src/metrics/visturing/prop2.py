@@ -192,6 +192,31 @@ class WeberLawPearson(BaseVisTuringMetric):
 
         return {self.name: json.dumps(results_per_layer)}
 
+    def unit_records(self) -> list[dict[str, Any]]:
+        records = []
+        for layer_idx, layer_diffs in enumerate(self._diffs_per_layer):
+            unit_idx = 0
+            for channel in self.channels:
+                values_by_level = layer_diffs.get(channel, [])
+                human_y = self.ground_truth_data.get(channel, {}).get("y", [])
+                for level_idx, values in enumerate(values_by_level):
+                    if not values:
+                        continue
+                    human_value = ""
+                    if len(human_y) > level_idx:
+                        human_value = float(np.ravel(human_y)[level_idx])
+                    records.append(
+                        {
+                            "layer_index": layer_idx,
+                            "unit_index": unit_idx,
+                            "unit_value": float(np.mean(values)),
+                            "human_value": human_value,
+                            "prediction": f"{channel}:{level_idx}",
+                        }
+                    )
+                    unit_idx += 1
+        return records
+
 
 class WeberLawKendall(BaseVisTuringMetric):
     """

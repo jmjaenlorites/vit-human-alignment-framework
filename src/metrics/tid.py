@@ -9,6 +9,7 @@ from ..dataset_loaders.tid import TID2013TorchDatasetLoader
 from ..models.base import BaseModelAdapter, ForwardOutputs
 from ..utils.common_enums import BackendEnum
 from .base import BaseMetric, BaseMetricCalculator
+from .representation import RepresentationPooling, representation_vector
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +34,7 @@ class SpearmanCorrelationMOS(BaseTIDMetric):
         # Almacenar similitudes y MOS scores para calcular correlación al final
         self.similarities: list[list[float]] = []
         self.mos_scores: list[float] = []
+        self.representation_pooling: RepresentationPooling = "flatten"
 
     def calculate(self, batch: Any, batch_results: ForwardOutputs) -> None:
         """
@@ -62,8 +64,14 @@ class SpearmanCorrelationMOS(BaseTIDMetric):
             layer_features_dist = features_dist[layer_idx]
 
             for i in range(batch_size):
-                feat_ref = layer_features_ref[i].flatten()
-                feat_dist = layer_features_dist[i].flatten()
+                feat_ref = representation_vector(
+                    layer_features_ref[i],
+                    self.representation_pooling,
+                )
+                feat_dist = representation_vector(
+                    layer_features_dist[i],
+                    self.representation_pooling,
+                )
 
                 # Similitud coseno
                 if self._backend == BackendEnum.TORCH:
@@ -140,6 +148,21 @@ class SpearmanCorrelationMOS(BaseTIDMetric):
         self.similarities = []
         self.mos_scores = []
 
+    def unit_records(self) -> list[dict[str, Any]]:
+        records = []
+        for layer_idx, layer_similarities in enumerate(self.similarities):
+            min_len = min(len(layer_similarities), len(self.mos_scores))
+            for unit_idx in range(min_len):
+                records.append(
+                    {
+                        "layer_index": layer_idx,
+                        "unit_index": unit_idx,
+                        "unit_value": layer_similarities[unit_idx],
+                        "human_value": self.mos_scores[unit_idx],
+                    }
+                )
+        return records
+
 
 class TIDMetricsCalculator(BaseMetricCalculator):
     """
@@ -152,6 +175,7 @@ class TIDMetricsCalculator(BaseMetricCalculator):
         backend: BackendEnum,
         metrics: Optional[list[BaseTIDMetric]] = None,
         dataset_path: Optional[str] = None,
+        batch_size: int = 32,
     ):
         self.name = "TIDMetricsCalculator"
         self._metrics: list[BaseTIDMetric] = metrics or [
@@ -161,6 +185,7 @@ class TIDMetricsCalculator(BaseMetricCalculator):
         self._return_saliency = False
         self._return_features = True
         self._dataset_path = dataset_path
+        self._batch_size = batch_size
 
     def get_dataset_loader(
         self, transform: Optional[Callable[[Any], Any]] = None
@@ -170,7 +195,7 @@ class TIDMetricsCalculator(BaseMetricCalculator):
         match self._backend:
             case BackendEnum.TORCH | BackendEnum.JAX:
                 return TID2013TorchDatasetLoader(
-                    batch_size=32,
+                    batch_size=self._batch_size,
                     shuffle=False,
                     num_workers=num_workers,
                     transform=transform,

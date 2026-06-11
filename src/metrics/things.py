@@ -7,6 +7,7 @@ from ..dataset_loaders.things import ThingsTorchDatasetLoader
 from ..models.base import BaseModelAdapter, ForwardOutputs
 from ..utils.common_enums import BackendEnum
 from .base import BaseMetric, BaseMetricCalculator
+from .representation import RepresentationPooling, representation_vector
 
 
 class BaseThingsMetric(BaseMetric):
@@ -30,7 +31,11 @@ class ThingsTripletAccuracy(BaseThingsMetric):
         super().__init__(backend)
         # Almacenar resultados por capa
         self.correct_per_layer: list[int] = []
+        self.correct_values_per_layer: list[list[int]] = []
+        self.prediction_values_per_layer: list[list[str]] = []
+        self.human_values_per_layer: list[list[str]] = []
         self.total: int = 0
+        self.representation_pooling: RepresentationPooling = "flatten"
 
     def calculate(self, batch: Any, batch_results: ForwardOutputs) -> None:
         """
@@ -61,6 +66,9 @@ class ThingsTripletAccuracy(BaseThingsMetric):
         # Inicializar contadores si es la primera vez
         if len(self.correct_per_layer) == 0:
             self.correct_per_layer = [0] * num_layers
+            self.correct_values_per_layer = [[] for _ in range(num_layers)]
+            self.prediction_values_per_layer = [[] for _ in range(num_layers)]
+            self.human_values_per_layer = [[] for _ in range(num_layers)]
 
         # Procesar cada elemento del batch
         for i in range(batch_size):
@@ -73,9 +81,18 @@ class ThingsTripletAccuracy(BaseThingsMetric):
 
             # Para cada capa, calcular similitudes y verificar predicción
             for layer_idx in range(num_layers):
-                feat1 = features_img1[layer_idx][i].flatten()
-                feat2 = features_img2[layer_idx][i].flatten()
-                feat3 = features_img3[layer_idx][i].flatten()
+                feat1 = representation_vector(
+                    features_img1[layer_idx][i],
+                    self.representation_pooling,
+                )
+                feat2 = representation_vector(
+                    features_img2[layer_idx][i],
+                    self.representation_pooling,
+                )
+                feat3 = representation_vector(
+                    features_img3[layer_idx][i],
+                    self.representation_pooling,
+                )
 
                 if self._backend == BackendEnum.TORCH:
                     sim_12 = self._cosine_similarity_torch(feat1, feat2).item()
@@ -94,28 +111,31 @@ class ThingsTripletAccuracy(BaseThingsMetric):
                 # - sim_13 mayor => img2 es outlier
                 # - sim_23 mayor => img1 es outlier
                 # - sim_12 mayor => img3 es outlier
-                is_correct = False
-                if (
-                    (sim_13 > sim_12)
-                    and (sim_13 > sim_23)
-                    and (choice_relpath == img2_relpath)
-                ):
-                    is_correct = True
-                elif (
-                    (sim_23 > sim_12)
-                    and (sim_23 > sim_13)
-                    and (choice_relpath == img1_relpath)
-                ):
-                    is_correct = True
-                elif (
-                    (sim_12 > sim_13)
-                    and (sim_12 > sim_23)
-                    and (choice_relpath == img3_relpath)
-                ):
-                    is_correct = True
+                if (sim_13 > sim_12) and (sim_13 > sim_23):
+                    prediction = "img2"
+                elif (sim_23 > sim_12) and (sim_23 > sim_13):
+                    prediction = "img1"
+                elif (sim_12 > sim_13) and (sim_12 > sim_23):
+                    prediction = "img3"
+                else:
+                    prediction = "tie"
+
+                if choice_relpath == img1_relpath:
+                    human_choice = "img1"
+                elif choice_relpath == img2_relpath:
+                    human_choice = "img2"
+                elif choice_relpath == img3_relpath:
+                    human_choice = "img3"
+                else:
+                    human_choice = str(choice_relpath)
+
+                is_correct = prediction == human_choice
 
                 if is_correct:
                     self.correct_per_layer[layer_idx] += 1
+                self.correct_values_per_layer[layer_idx].append(int(is_correct))
+                self.prediction_values_per_layer[layer_idx].append(prediction)
+                self.human_values_per_layer[layer_idx].append(human_choice)
 
     def _cosine_similarity_torch(
         self, a: torch.Tensor, b: torch.Tensor
@@ -150,7 +170,28 @@ class ThingsTripletAccuracy(BaseThingsMetric):
     def reset(self) -> None:
         """Reinicia el estado de la métrica."""
         self.correct_per_layer = []
+        self.correct_values_per_layer = []
+        self.prediction_values_per_layer = []
+        self.human_values_per_layer = []
         self.total = 0
+
+    def unit_records(self) -> list[dict[str, Any]]:
+        records = []
+        for layer_idx, values in enumerate(self.correct_values_per_layer):
+            for unit_idx, value in enumerate(values):
+                prediction = self.prediction_values_per_layer[layer_idx][unit_idx]
+                human_value = self.human_values_per_layer[layer_idx][unit_idx]
+                records.append(
+                    {
+                        "layer_index": layer_idx,
+                        "unit_index": unit_idx,
+                        "unit_value": value,
+                        "human_value": human_value,
+                        "prediction": prediction,
+                        "is_correct": value,
+                    }
+                )
+        return records
 
 
 class ThingsMetricsCalculator(BaseMetricCalculator):
