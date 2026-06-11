@@ -64,3 +64,50 @@ def test_runner_json_executes_end_to_end_with_google_jax_vit(tmp_path) -> None:
     runner.execute()
     rerun_frame = pd.read_csv(results_path)
     pd.testing.assert_frame_equal(first_results, rerun_frame)
+
+
+@pytest.mark.real_model
+@pytest.mark.slow
+def test_runner_json_executes_things_end_to_end_with_google_jax_vit(tmp_path) -> None:
+    """Ejerce `things_triplet_accuracy` con un ViT Google (Flax/JAX) real para
+    cubrir el dispatch de la familia `things` cuando el backend es JAX."""
+    repo_root = Path(__file__).resolve().parents[2]
+    config_path = tmp_path / "experiments.json"
+    results_path = tmp_path / "results.csv"
+    config_path.write_text(
+        json.dumps(
+            {
+                "defaults": {
+                    "batch_size": 2,
+                },
+                "dataset_defaults": {
+                    "things": {
+                        "dataset_path": str(repo_root / "tests" / "data" / "things"),
+                    }
+                },
+                "models": [f"google::{GOOGLE_TI16_FILENAME}"],
+                "experiments": [
+                    {
+                        "experiment_id": "things-triplet-google-ti16",
+                        "metric": "things_triplet_accuracy",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    runner = Runner(json_path=str(config_path), results_path=str(results_path))
+    runner.execute()
+
+    frame = pd.read_csv(results_path)
+    assert frame.loc[0, "status"] == "done"
+    assert frame.loc[0, "model_name"] == f"google::{GOOGLE_TI16_FILENAME}"
+    assert frame.loc[0, "experiment_id"] == "things-triplet-google-ti16"
+    assert frame.loc[0, "result"].startswith("[")
+
+    # Reanudación: un segundo run no debe recomputar ni cambiar resultados.
+    first_results = frame.copy()
+    runner.execute()
+    rerun_frame = pd.read_csv(results_path)
+    pd.testing.assert_frame_equal(first_results, rerun_frame)

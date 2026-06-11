@@ -91,7 +91,7 @@ Estructura mínima:
 
 Reglas importantes:
 - `defaults`: sólo claves realmente comunes a todas las métricas del archivo.
-- `dataset_defaults`: configuración compartida por familia (`levels`, `visturing`, `tid`, `nights`, `saliency`).
+- `dataset_defaults`: configuración compartida por familia (`levels`, `visturing`, `tid`, `nights`, `saliency`, `things`).
 - `experiments[].config`: overrides o parámetros específicos del experimento.
 - `experiment_id`: identifica de forma estable cada variante de experimento.
 

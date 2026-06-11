@@ -15,7 +15,14 @@ MASK_CONTRASTS = {"0075", "0150", "0225", "0300"}
 MASK_ORIENTATIONS = {"0", "22p5", "45", "67p5", "90", "112p5", "135"}
 LOW_HIGH_FREQS = {"all", "low", "high"}
 PATH_FIELDS = {"levels_path", "imagenet_path", "data_path", "gt_path", "dataset_path"}
-DATASET_DEFAULT_GROUPS = {"levels", "visturing", "tid", "nights", "saliency"}
+DATASET_DEFAULT_GROUPS = {
+    "levels",
+    "visturing",
+    "tid",
+    "nights",
+    "saliency",
+    "things",
+}
 
 
 METRIC_SPECS: dict[str, MetricSpec] = {
@@ -39,6 +46,10 @@ METRIC_SPECS: dict[str, MetricSpec] = {
         family="levels",
         allowed_keys={"split", "levels_path", "imagenet_path", "batch_size"},
         value_options={"split": LEVELS_SPLITS},
+    ),
+    "things_triplet_accuracy": MetricSpec(
+        family="things",
+        allowed_keys={"dataset_path", "batch_size"},
     ),
     "visturing_spectral_sensitivity": MetricSpec(
         family="visturing",

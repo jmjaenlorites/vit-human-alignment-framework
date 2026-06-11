@@ -8,11 +8,14 @@ Los nombres de submódulos (`Transformer`, `posembed_input`, `encoderblock_{i}`,
 `MlpBlock_0`, `embedding`, `cls`, `head`) coinciden 1:1 con los del repo
 oficial de Google para que los `.npz` se puedan cargar sin renombrado.
 
-Cada bloque del encoder hace `self.sow('intermediates', 'block_out', x, ...)`
-para que `model.apply(..., capture_intermediates=True, mutable=['intermediates'])`
-devuelva las features por capa en `state['intermediates']['Transformer']['block_out']`.
-Igualmente, `nn.MultiHeadDotProductAttention(..., sow_weights=True)` expone los
-pesos de atención por bloque, usados para el rollout.
+Cada bloque del encoder hace `self.sow('features', 'block_out', x, ...)`,
+mientras que `nn.MultiHeadDotProductAttention(..., sow_weights=True)` deposita
+los pesos de atención en `'intermediates'`. Las dos colecciones son
+independientes, por lo que el adapter puede capturar **solo** lo que la
+métrica necesite (features SIN attention, o attention SIN features) marcando
+solo la colección correspondiente como `mutable` en `model.apply(...)`. Esto
+divide el pico de VRAM de un forward de B/8 (~3.6 GB con todo) a ~220 MB
+cuando solo se piden features.
 """
 
 from typing import Optional
@@ -99,10 +102,11 @@ class Encoder(nn.Module):
                 num_heads=self.num_heads,
                 name=f"encoderblock_{lyr}",
             )(x, deterministic=not train)
-            # Snapshot output of every block so adapter puede reconstruir features
-            # por capa sin reimplementar el encoder.
+            # Sow en colección "features" (NO "intermediates"): así el adapter
+            # puede pedir solo features (mutable=["features"]) sin acarrear
+            # los attention_weights de las MHA, que viven en "intermediates".
             self.sow(
-                "intermediates",
+                "features",
                 "block_out",
                 x,
                 init_fn=lambda: (),

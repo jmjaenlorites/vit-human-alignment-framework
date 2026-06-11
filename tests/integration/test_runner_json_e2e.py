@@ -63,6 +63,9 @@ def test_runner_json_executes_end_to_end_with_results_resume(
                         "data_path": str(repo_root / "tests" / "data" / "visturing"),
                         "gt_path": str(repo_root / "tests" / "data" / "visturing"),
                     },
+                    "things": {
+                        "dataset_path": str(repo_root / "tests" / "data" / "things"),
+                    },
                 },
                 "models": ["vit-b16"],
                 "experiments": [
@@ -74,6 +77,10 @@ def test_runner_json_executes_end_to_end_with_results_resume(
                     {
                         "experiment_id": "visturing-spectral",
                         "metric": "visturing_spectral_sensitivity",
+                    },
+                    {
+                        "experiment_id": "things-triplet",
+                        "metric": "things_triplet_accuracy",
                     },
                 ],
             }
@@ -88,7 +95,11 @@ def test_runner_json_executes_end_to_end_with_results_resume(
 
     frame = pd.read_csv(results_path)
     assert set(frame["status"]) == {"done"}
-    assert set(frame["experiment_id"]) == {"levels-between", "visturing-spectral"}
+    assert set(frame["experiment_id"]) == {
+        "levels-between",
+        "visturing-spectral",
+        "things-triplet",
+    }
     assert frame["result"].notna().all()
 
     first_results = frame.copy()

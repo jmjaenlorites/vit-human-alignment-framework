@@ -6,6 +6,7 @@ import pytest
 
 from src.metrics.levels import LevelsMetricsCalculator
 from src.metrics.nights import NightsMetricsCalculator
+from src.metrics.things import ThingsMetricsCalculator
 from src.metrics.tid import TIDMetricsCalculator
 from src.utils.common_enums import BackendEnum
 
@@ -271,6 +272,78 @@ class TestNightsMetricsCalculatorIntegration:
         assert len(batch_results["features_ref"]) == 12, "Should have 12 layers"
 
 
+@pytest.mark.real_model
+class TestThingsMetricsCalculatorIntegration:
+    """Integration tests for Things calculator with real model and test data."""
+
+    def test_full_pipeline_with_real_model(self, real_model, things_test_data_path):
+        """Test complete Things metrics calculation with real model and test data."""
+        calculator = ThingsMetricsCalculator(
+            BackendEnum.TORCH, dataset_path=things_test_data_path
+        )
+
+        results = calculator.run(real_model)
+
+        assert "things_triplet_accuracy" in results
+
+        accuracy_values = json.loads(results["things_triplet_accuracy"])
+
+        assert len(accuracy_values) == 12, (
+            f"Expected 12 layers, got {len(accuracy_values)}"
+        )
+
+        for layer_idx, accuracy in enumerate(accuracy_values):
+            assert 0 <= accuracy <= 1, (
+                f"Layer {layer_idx}: Accuracy {accuracy} out of range [0, 1]"
+            )
+
+        print(f"\nThings Triplet Accuracy per layer: {accuracy_values}")
+        print(f"Mean Accuracy: {sum(accuracy_values) / len(accuracy_values):.4f}")
+
+    def test_results_consistency(self, real_model, things_test_data_path):
+        """Test that running twice gives consistent results."""
+        calculator1 = ThingsMetricsCalculator(
+            BackendEnum.TORCH, dataset_path=things_test_data_path
+        )
+        calculator2 = ThingsMetricsCalculator(
+            BackendEnum.TORCH, dataset_path=things_test_data_path
+        )
+
+        results1 = calculator1.run(real_model)
+        results2 = calculator2.run(real_model)
+
+        acc1 = json.loads(results1["things_triplet_accuracy"])
+        acc2 = json.loads(results2["things_triplet_accuracy"])
+
+        for i, (v1, v2) in enumerate(zip(acc1, acc2)):
+            assert abs(v1 - v2) < 1e-6, f"Layer {i}: Accuracy inconsistent {v1} vs {v2}"
+
+    def test_batch_processing(self, real_model, things_test_data_path):
+        """Test that batch processing works correctly."""
+        calculator = ThingsMetricsCalculator(
+            BackendEnum.TORCH, dataset_path=things_test_data_path
+        )
+
+        loader = calculator.get_dataset_loader(transform=real_model.transform)
+
+        iterator = loader.get_iterator()
+        batch = next(iter(iterator))
+
+        img1, img2, img3, choice, img1_relpaths, img2_relpaths, img3_relpaths = batch
+
+        assert len(img1.shape) == 4, "img1 should be [B, C, H, W]"
+        assert len(img2.shape) == 4, "img2 should be [B, C, H, W]"
+        assert len(img3.shape) == 4, "img3 should be [B, C, H, W]"
+        assert img1.shape == img2.shape == img3.shape
+
+        batch_results = calculator.process_batch(batch, real_model)
+
+        assert "features_img1" in batch_results
+        assert "features_img2" in batch_results
+        assert "features_img3" in batch_results
+        assert len(batch_results["features_img1"]) == 12, "Should have 12 layers"
+
+
 @pytest.mark.golden
 class TestPerceptualWithGoldenData:
     """Tests using pre-computed golden fixtures for perceptual metrics."""
@@ -341,6 +414,49 @@ class TestPerceptualWithGoldenData:
         
         for i, (comp, exp) in enumerate(zip(computed_accuracy, expected_accuracy)):
             assert abs(comp - exp) < 1e-5, f"Layer {i}: Accuracy mismatch {comp} vs {exp}"
+
+    def test_things_matches_golden(self, things_golden_data):
+        """Test que las métricas Things sobre golden data coinciden con valores esperados."""
+        from src.metrics.things import ThingsTripletAccuracy
+
+        img1 = things_golden_data["img1"]
+        img2 = things_golden_data["img2"]
+        img3 = things_golden_data["img3"]
+        choice = things_golden_data["choice"]
+        img1_relpaths = things_golden_data["img1_relpaths"]
+        img2_relpaths = things_golden_data["img2_relpaths"]
+        img3_relpaths = things_golden_data["img3_relpaths"]
+        features_img1 = things_golden_data["features_img1"]
+        features_img2 = things_golden_data["features_img2"]
+        features_img3 = things_golden_data["features_img3"]
+        expected_accuracy = things_golden_data["expected_accuracy"]
+
+        metric = ThingsTripletAccuracy(BackendEnum.TORCH)
+
+        batch = (
+            img1,
+            img2,
+            img3,
+            choice,
+            img1_relpaths,
+            img2_relpaths,
+            img3_relpaths,
+        )
+        batch_results = {
+            "features_img1": features_img1,
+            "features_img2": features_img2,
+            "features_img3": features_img3,
+        }
+
+        metric.calculate(batch, batch_results)
+        results = metric.finalize()
+
+        computed_accuracy = json.loads(results["things_triplet_accuracy"])
+
+        for i, (comp, exp) in enumerate(zip(computed_accuracy, expected_accuracy)):
+            assert abs(comp - exp) < 1e-5, (
+                f"Layer {i}: Accuracy mismatch {comp} vs {exp}"
+            )
 
     def test_nights_matches_golden(self, nights_golden_data):
         """Test that Nights metrics computed on golden data match expected values."""

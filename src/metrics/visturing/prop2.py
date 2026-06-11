@@ -362,7 +362,7 @@ def create_prop2_calculator(
         channel=channel,
         batch_size=batch_size,
         shuffle=False,
-        num_workers=2,
+        num_workers=0 if backend == BackendEnum.JAX else 2,
         data_path=data_path,
         use_torch_upstream_semantics=backend == BackendEnum.TORCH,
     )

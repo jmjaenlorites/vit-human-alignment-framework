@@ -16,10 +16,12 @@ import torch
 from src.dataset_loaders.levels import LevelsTorchDatasetLoader
 from src.dataset_loaders.nights import NightsTorchDatasetLoader
 from src.dataset_loaders.saliency import SaliencyMIT1003TorchDatasetLoader
+from src.dataset_loaders.things import ThingsTorchDatasetLoader
 from src.dataset_loaders.tid import TID2013TorchDatasetLoader
 from src.metrics.levels import TripletAccuracy
 from src.metrics.nights import PreferenceAccuracy
 from src.metrics.saliency import AUC_Judd, PearsonCorrelationCoefficient
+from src.metrics.things import ThingsTripletAccuracy
 from src.metrics.tid import SpearmanCorrelationMOS
 from src.models.vit_b16 import ViT_B_16
 from src.utils.common_enums import BackendEnum
@@ -282,18 +284,93 @@ def generate_nights_golden(
     logger.info(f"  Accuracy: {expected_accuracy[:3]}...")
 
 
+def generate_things_golden(
+    model: ViT_B_16, test_data_path: str, fixtures_dir: Path
+) -> None:
+    """Generate golden data for Things metrics."""
+    logger.info("Generating Things golden fixtures...")
+
+    loader = ThingsTorchDatasetLoader(
+        batch_size=6,
+        shuffle=False,
+        num_workers=0,
+        transform=model.transform,
+        dataset_path=test_data_path,
+    )
+
+    iterator = loader.get_iterator()
+    batch = next(iter(iterator))
+    img1, img2, img3, choice, img1_relpaths, img2_relpaths, img3_relpaths = batch
+
+    img1_device = img1.to(model.device)
+    img2_device = img2.to(model.device)
+    img3_device = img3.to(model.device)
+
+    model_output_1 = model.forward(
+        img1_device, return_features=True, return_saliency=False
+    )
+    model_output_2 = model.forward(
+        img2_device, return_features=True, return_saliency=False
+    )
+    model_output_3 = model.forward(
+        img3_device, return_features=True, return_saliency=False
+    )
+
+    features_img1 = [f.cpu() for f in model_output_1["features"]]
+    features_img2 = [f.cpu() for f in model_output_2["features"]]
+    features_img3 = [f.cpu() for f in model_output_3["features"]]
+
+    metric = ThingsTripletAccuracy(BackendEnum.TORCH)
+    batch_for_metric = (
+        img1.cpu(),
+        img2.cpu(),
+        img3.cpu(),
+        list(choice),
+        list(img1_relpaths),
+        list(img2_relpaths),
+        list(img3_relpaths),
+    )
+    batch_results = {
+        "features_img1": features_img1,
+        "features_img2": features_img2,
+        "features_img3": features_img3,
+    }
+    metric.calculate(batch_for_metric, batch_results)
+    expected_accuracy = json.loads(metric.finalize()["things_triplet_accuracy"])
+
+    golden_data = {
+        "img1": img1.cpu(),
+        "img2": img2.cpu(),
+        "img3": img3.cpu(),
+        "choice": list(choice),
+        "img1_relpaths": list(img1_relpaths),
+        "img2_relpaths": list(img2_relpaths),
+        "img3_relpaths": list(img3_relpaths),
+        "features_img1": features_img1,
+        "features_img2": features_img2,
+        "features_img3": features_img3,
+        "expected_accuracy": expected_accuracy,
+    }
+
+    output_path = fixtures_dir / "things_golden.pt"
+    torch.save(golden_data, output_path)
+    logger.info(f"Saved Things golden data to {output_path}")
+    logger.info(f"  Accuracy: {expected_accuracy[:3]}...")
+
+
 def main():
     """Generate all golden fixtures."""
     # Setup paths
     test_dir = Path(__file__).parent
     fixtures_dir = test_dir / "fixtures"
     fixtures_dir.mkdir(exist_ok=True)
-    
+
     data_dir = test_dir / "data"
     tid_path = str(data_dir / "tid")
     levels_csv_path = str(data_dir / "levels")
     levels_images_path = str(data_dir / "levels" / "images")
     nights_path = str(data_dir / "nights")
+    things_path = str(data_dir / "things")
     
     # Load model once
     logger.info("Loading ViT_B_16 model...")
@@ -320,7 +397,12 @@ def main():
         generate_nights_golden(model, nights_path, fixtures_dir)
     except Exception as e:
         logger.error(f"Failed to generate Nights golden: {e}")
-    
+
+    try:
+        generate_things_golden(model, things_path, fixtures_dir)
+    except Exception as e:
+        logger.error(f"Failed to generate Things golden: {e}")
+
     logger.info("Golden fixtures generation complete!")
 
 

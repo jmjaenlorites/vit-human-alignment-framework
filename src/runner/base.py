@@ -9,6 +9,7 @@ from ..metrics.base import BaseMetric
 from ..metrics.levels import LevelsMetricsCalculator
 from ..metrics.nights import NightsMetricsCalculator
 from ..metrics.saliency import SaliencyMetricsCalculator
+from ..metrics.things import ThingsMetricsCalculator
 from ..metrics.tid import TIDMetricsCalculator
 from ..metrics.visturing import (
     create_prop1_calculator,
@@ -143,6 +144,11 @@ class Runner:
                 metric
                 for metric in perceptual_metrics
                 if metric.name.startswith("nights_")
+            ]
+            things_metrics = [
+                metric
+                for metric in perceptual_metrics
+                if metric.name.startswith("things_")
             ]
 
             # Visturing metrics: run the corresponding property calculators with defaults
@@ -282,6 +288,22 @@ class Runner:
                     [nights_results[metric.name] for metric in nights_metrics],
                 )
 
+            if things_metrics:
+                logger.info(
+                    "Running Things metrics: %s",
+                    [metric.name for metric in things_metrics],
+                )
+                things_metrics_calculator = ThingsMetricsCalculator(
+                    model.backend, metrics=things_metrics
+                )
+                things_results = things_metrics_calculator.run(model)
+                self._update_cells(
+                    df,
+                    experiment_spec.row_index,
+                    [metric.name for metric in things_metrics],
+                    [things_results[metric.name] for metric in things_metrics],
+                )
+
     def _execute_json(self) -> None:
         if not self.json_path:
             raise ValueError("json_path is required for JSON execution")
@@ -290,25 +312,100 @@ class Runner:
 
         results_store = ResultsStore(self.results_path)
         experiments = JSONExperimentSource(self.json_path).load()
-        model_cache: dict[str, Any] = {}
+
+        # Cache de un solo slot: cargamos un modelo, gastamos todas sus
+        # métricas y lo liberamos antes de pasar al siguiente. La iteración en
+        # `JSONExperimentSource.load` viene model-major, así que cada modelo
+        # se carga UNA vez. Liberamos GPU explícitamente al cambiar de modelo
+        # para que torch y jax no compitan por la VRAM.
+        current_model_name: Optional[str] = None
+        current_model: Any = None
 
         for experiment in experiments:
             logger.info("Resolved experiment: %s", experiment)
             if not results_store.should_run(experiment):
                 continue
 
-            model = model_cache.get(experiment.model_name)
-            if model is None:
-                model = resolve_model(experiment.model_name)
-                model_cache[experiment.model_name] = model
+            if experiment.model_name != current_model_name:
+                if current_model is not None:
+                    self._release_model(current_model)
+                    current_model = None
+                    current_model_name = None
+                current_model = resolve_model(experiment.model_name)
+                current_model_name = experiment.model_name
+
             results_store.mark_running(experiment)
             try:
-                result = self._run_metric_experiment(experiment, model)
+                result = self._run_metric_experiment(experiment, current_model)
             except Exception as exc:
                 results_store.mark_error(experiment, str(exc))
+                if _is_out_of_memory_error(exc):
+                    # OOM en una métrica concreta no debe tumbar el run entero:
+                    # marcamos la fila como error y seguimos. El usuario puede
+                    # re-ejecutar esa métrica con menos batch_size, otra GPU,
+                    # etc. sin perder el resto de experimentos.
+                    logger.warning(
+                        "Out-of-memory while running %s on %s — marked as "
+                        "error and continuing with the next experiment. "
+                        "(error: %s)",
+                        experiment.experiment_id,
+                        experiment.model_name,
+                        exc,
+                    )
+                    continue
                 raise
 
             results_store.mark_done(experiment, result)
+
+        if current_model is not None:
+            self._release_model(current_model)
+
+    def _release_model(self, model: Any) -> None:
+        """Libera la VRAM ocupada por un modelo antes de cargar el siguiente."""
+        backend = getattr(model, "backend", None)
+        try:
+            if backend == BackendEnum.TORCH:
+                self._release_torch_model(model)
+            elif backend == BackendEnum.JAX:
+                self._release_jax_model(model)
+        except Exception:
+            logger.exception(
+                "Failed to release model %r cleanly; continuing.",
+                getattr(model, "name", "<unknown>"),
+            )
+
+    def _release_torch_model(self, model: Any) -> None:
+        import torch
+
+        inner = getattr(model, "model", None)
+        if inner is not None and hasattr(inner, "to"):
+            try:
+                inner.to("cpu")
+            except Exception:
+                pass
+        del inner
+        del model
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+            try:
+                torch.cuda.ipc_collect()
+            except Exception:
+                pass
+
+    def _release_jax_model(self, model: Any) -> None:
+        import jax
+
+        # Borrar params explícitamente (los `jax.Array` en GPU se liberan al
+        # caer la última referencia).
+        inner = getattr(model, "model", None)
+        if isinstance(inner, dict):
+            inner.pop("params", None)
+        del inner
+        del model
+        try:
+            jax.clear_caches()
+        except Exception:
+            pass
 
     def _run_metric_experiment(
         self,
@@ -354,6 +451,15 @@ class Runner:
                 model.backend,
                 metrics=[metric],
                 dataset_path=experiment.config.get("dataset_path"),
+            )
+            return calculator.run(model)[metric.name]
+
+        if metric_spec.family == "things":
+            calculator = ThingsMetricsCalculator(
+                model.backend,
+                metrics=[metric],
+                dataset_path=experiment.config.get("dataset_path"),
+                batch_size=experiment.config.get("batch_size", 32),
             )
             return calculator.run(model)[metric.name]
 
@@ -498,3 +604,41 @@ class Runner:
         if isinstance(cell, float):
             return pd.isna(cell)
         return False
+
+
+# Marcadores de OOM observados en la práctica con torch CUDA y JAX (XLA).
+# La detección es por nombre de clase + sustring del mensaje para no acoplar
+# al runner imports condicionales de torch/jax que pueden no estar disponibles.
+_OOM_EXCEPTION_NAMES: frozenset[str] = frozenset(
+    {
+        "OutOfMemoryError",            # torch.cuda.OutOfMemoryError
+        "JaxRuntimeError",             # jax.errors.JaxRuntimeError
+        "XlaRuntimeError",             # jaxlib.xla_extension.XlaRuntimeError
+        "RuntimeError",                # caída común con mensaje "out of memory"
+    }
+)
+_OOM_MESSAGE_MARKERS: tuple[str, ...] = (
+    "out of memory",
+    "RESOURCE_EXHAUSTED",
+    "CUDA out of memory",
+    "CUDA_ERROR_OUT_OF_MEMORY",
+)
+
+
+def _is_out_of_memory_error(exc: BaseException) -> bool:
+    """Heurística para detectar OOM en torch/JAX sin importar nada.
+
+    Revisa el nombre de la clase de la excepción y el mensaje. Esto cubre:
+    - `torch.cuda.OutOfMemoryError` (torch >= 1.13)
+    - `jax.errors.JaxRuntimeError: RESOURCE_EXHAUSTED: Out of memory ...`
+    - `RuntimeError: CUDA out of memory ...` (torch antiguos)
+    """
+    if exc.__class__.__name__ not in _OOM_EXCEPTION_NAMES:
+        # Recorremos también la cadena de causas (`__cause__` / `__context__`)
+        # por si el OOM viene envuelto.
+        cause = getattr(exc, "__cause__", None) or getattr(exc, "__context__", None)
+        if cause is not None and cause is not exc:
+            return _is_out_of_memory_error(cause)
+        return False
+    message = str(exc)
+    return any(marker.lower() in message.lower() for marker in _OOM_MESSAGE_MARKERS)

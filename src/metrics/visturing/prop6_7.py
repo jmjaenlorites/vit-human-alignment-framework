@@ -321,7 +321,7 @@ def create_prop6_7_calculator(
         gabor_key=gabor_key,
         batch_size=batch_size,
         shuffle=False,
-        num_workers=2,
+        num_workers=0 if backend == BackendEnum.JAX else 2,
         data_path=data_path,
     )
 

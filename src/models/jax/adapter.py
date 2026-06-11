@@ -104,13 +104,31 @@ class DynamicGoogleViTAdapter(BaseModelAdapter):
         arr = np.transpose(arr, (0, 2, 3, 1))
         return jnp.asarray(arr)
 
-    def _apply(self, x: jnp.ndarray):
+    def _apply_features(self, x: jnp.ndarray):
+        """Forward que solo captura `block_out` (colección `features`).
+
+        Las MHA siguen ejecutando, pero su `sow_weights=True` apunta a
+        `intermediates`, que NO está en `mutable` — por tanto no se materializa
+        el árbol de attention. Para B/8 batch=8 ahorra ~3.4 GB por forward.
+        """
+        return self.model["apply_fn"](
+            {"params": self.model["params"]},
+            x,
+            train=False,
+            mutable=["features"],
+        )
+
+    def _apply_saliency(self, x: jnp.ndarray):
+        """Forward que solo captura `attention_weights` (colección `intermediates`).
+
+        El sow de `block_out` apunta a `features`, que NO está en `mutable`.
+        Solo se mantiene el árbol de attention que el rollout consume.
+        """
         return self.model["apply_fn"](
             {"params": self.model["params"]},
             x,
             train=False,
             mutable=["intermediates"],
-            capture_intermediates=True,
         )
 
     # ------------------------------------------------------------------
@@ -120,8 +138,8 @@ class DynamicGoogleViTAdapter(BaseModelAdapter):
         self, batch: Any, layers: Optional[list[int]] = None
     ) -> list[jnp.ndarray]:
         x = self._to_nhwc(batch)
-        _, state = self._apply(x)
-        block_outs = state["intermediates"]["Transformer"]["block_out"]
+        _, state = self._apply_features(x)
+        block_outs = state["features"]["Transformer"]["block_out"]
         if not isinstance(block_outs, tuple):
             block_outs = tuple(block_outs)
         num_layers = self.model["num_layers"]
@@ -136,7 +154,7 @@ class DynamicGoogleViTAdapter(BaseModelAdapter):
         self, batch: Any, layers: Optional[list[int]] = None
     ) -> list[jnp.ndarray]:
         x = self._to_nhwc(batch)
-        _, state = self._apply(x)
+        _, state = self._apply_saliency(x)
 
         num_layers = self.model["num_layers"]
         encoder_state = state["intermediates"]["Transformer"]

@@ -6,6 +6,7 @@ from .base import BaseMetric
 from .levels import LevelsMetricsCalculator, TripletAccuracy
 from .nights import NightsMetricsCalculator, PreferenceAccuracy
 from .saliency import AUC_Judd, PearsonCorrelationCoefficient, SaliencyMetricsCalculator
+from .things import ThingsMetricsCalculator, ThingsTripletAccuracy
 from .tid import SpearmanCorrelationMOS, TIDMetricsCalculator
 from .visturing.base import BaseVisTuringMetric, VisTuringCalculator
 from .visturing.prop1 import SpectralSensitivityPearson
@@ -24,6 +25,7 @@ METRIC_LOADERS: dict[str, Callable[[BackendEnum], BaseMetric]] = {
     ),
     SpearmanCorrelationMOS.name: lambda backend: SpearmanCorrelationMOS(backend),
     TripletAccuracy.name: lambda backend: TripletAccuracy(backend),
+    ThingsTripletAccuracy.name: lambda backend: ThingsTripletAccuracy(backend),
     PreferenceAccuracy.name: lambda backend: PreferenceAccuracy(backend),
     SpectralSensitivityPearson.name: lambda backend: SpectralSensitivityPearson(
         backend

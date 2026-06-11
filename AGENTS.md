@@ -45,7 +45,7 @@
 - The JSON experiment flow must remain backward-compatible with the legacy CSV flow.
 - Treat `src/runner/config_validation.py` as the current source of truth for JSON config validation.
 - Treat `src/runner/json_source.py` as the place where `defaults`, `dataset_defaults`, and per-experiment config are merged.
-- `dataset_defaults` is scoped by metric family (`levels`, `visturing`, `tid`, `nights`, `saliency`); do not mix family-specific keys into global `defaults`.
+- `dataset_defaults` is scoped by metric family (`levels`, `visturing`, `tid`, `nights`, `saliency`, `things`); do not mix family-specific keys into global `defaults`.
 - `results.csv` is only for the JSON flow; do not change legacy CSV persistence unless explicitly requested.
 - Validation errors should fail early and include valid options whenever the domain is closed.
 

@@ -15,6 +15,9 @@
     "nights": {
       "batch_size": 8
     },
+    "things": {
+      "batch_size": 8
+    },
     "saliency": {
       "batch_size": 8
     }
@@ -31,7 +34,16 @@
     "timm::vit_base_patch8_224.augreg_in21k_ft_in1k",
     "timm::vit_base_patch32_224.augreg_in21k_ft_in1k",
     "timm::vit_base_patch16_224.augreg_in21k",
-    "timm::vit_base_patch16_384.augreg_in1k"
+    "timm::vit_base_patch16_384.augreg_in1k",
+    "google::Ti_16-i21k-300ep-lr_0.001-aug_none-wd_0.03-do_0.0-sd_0.0--imagenet2012-steps_20k-lr_0.03-res_224",
+    "google::S_16-i21k-300ep-lr_0.001-aug_none-wd_0.03-do_0.0-sd_0.0--imagenet2012-steps_20k-lr_0.03-res_224",
+    "google::B_16-i21k-300ep-lr_0.001-aug_none-wd_0.03-do_0.0-sd_0.0--imagenet2012-steps_20k-lr_0.01-res_224",
+    "google::L_16-i21k-300ep-lr_0.001-aug_light1-wd_0.03-do_0.0-sd_0.0--imagenet2012-steps_20k-lr_0.03-res_224",
+    "google::B_16-i1k-300ep-lr_0.001-aug_medium2-wd_0.1-do_0.1-sd_0.1",
+    "google::B_8-i21k-300ep-lr_0.001-aug_medium1-wd_0.1-do_0.0-sd_0.0--imagenet2012-steps_20k-lr_0.01-res_224",
+    "google::B_32-i21k-300ep-lr_0.001-aug_none-wd_0.03-do_0.0-sd_0.0--imagenet2012-steps_20k-lr_0.03-res_224",
+    "google::B_16-i21k-300ep-lr_0.001-aug_medium1-wd_0.1-do_0.0-sd_0.0",
+    "google::B_16-i1k-300ep-lr_0.001-aug_strong2-wd_0.1-do_0.1-sd_0.1--imagenet2012-steps_20k-lr_0.01-res_384"
   ],
   "experiments": [
     {
@@ -49,6 +61,10 @@
     {
       "experiment_id": "nights-preference-accuracy",
       "metric": "nights_preference_accuracy"
+    },
+    {
+      "experiment_id": "things-triplet-accuracy",
+      "metric": "things_triplet_accuracy"
     },
     {
       "experiment_id": "levels-between-class",

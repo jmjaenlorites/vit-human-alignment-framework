@@ -53,6 +53,39 @@ def test_json_source_expands_models_and_merges_defaults(tmp_path) -> None:
     assert experiments[1].run_key == "vit-l14__levels-within"
 
 
+def test_json_source_iteration_is_model_major(tmp_path) -> None:
+    """Para acotar el uso de VRAM, el runner gasta cada modelo en todas sus
+    métricas antes de pasar al siguiente — la fuente debe entregar los
+    experimentos en orden model-major (todos los de M1, luego todos los de M2).
+    """
+    config_path = tmp_path / "experiments.json"
+    config_path.write_text(
+        json.dumps(
+            {
+                "models": ["vit-b16", "vit-l14"],
+                "experiments": [
+                    {"experiment_id": "exp-a", "metric": "saliency_auc_judd"},
+                    {
+                        "experiment_id": "exp-b",
+                        "metric": "saliency_pearson_correlation_coefficient",
+                    },
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    experiments = JSONExperimentSource(str(config_path)).load()
+
+    keys = [(e.model_name, e.experiment_id) for e in experiments]
+    assert keys == [
+        ("vit-b16", "exp-a"),
+        ("vit-b16", "exp-b"),
+        ("vit-l14", "exp-a"),
+        ("vit-l14", "exp-b"),
+    ]
+
+
 def test_json_source_merges_dataset_defaults_by_metric_family(tmp_path) -> None:
     config_path = tmp_path / "experiments.json"
     config_path.write_text(
@@ -395,6 +428,57 @@ def test_json_source_rejects_channel_for_csf_metric(tmp_path) -> None:
     )
 
     with pytest.raises(ValueError, match="Allowed keys:.*batch_size"):
+        JSONExperimentSource(str(config_path)).load()
+
+
+def test_json_source_merges_things_dataset_defaults(tmp_path) -> None:
+    config_path = tmp_path / "experiments.json"
+    config_path.write_text(
+        json.dumps(
+            {
+                "defaults": {"batch_size": 4},
+                "dataset_defaults": {
+                    "things": {"dataset_path": "/tmp/things"},
+                },
+                "models": ["vit-b16"],
+                "experiments": [
+                    {
+                        "experiment_id": "things-triplet",
+                        "metric": "things_triplet_accuracy",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    experiments = JSONExperimentSource(str(config_path)).load()
+
+    assert experiments[0].config == {
+        "batch_size": 4,
+        "dataset_path": "/tmp/things",
+    }
+
+
+def test_json_source_rejects_unknown_things_config_key(tmp_path) -> None:
+    config_path = tmp_path / "experiments.json"
+    config_path.write_text(
+        json.dumps(
+            {
+                "models": ["vit-b16"],
+                "experiments": [
+                    {
+                        "experiment_id": "things-invalid-key",
+                        "metric": "things_triplet_accuracy",
+                        "config": {"split": "between_class"},
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="Allowed keys:.*dataset_path"):
         JSONExperimentSource(str(config_path)).load()
 
 

@@ -54,6 +54,12 @@ def visturing_test_data_path(test_data_dir: Path) -> str:
     return str(test_data_dir / "visturing")
 
 
+@pytest.fixture(scope="session")
+def things_test_data_path(test_data_dir: Path) -> str:
+    """Return path to Things test data."""
+    return str(test_data_dir / "things")
+
+
 @pytest.fixture
 def mock_model() -> MagicMock:
     """Create a mock model that returns deterministic features and saliency maps.
@@ -200,6 +206,34 @@ def levels_golden_data(fixtures_dir: Path) -> dict[str, Any]:
         - expected_accuracy: Expected accuracy per layer
     """
     golden_path = fixtures_dir / "levels_golden.pt"
+
+    if not golden_path.exists():
+        pytest.skip(
+            f"Golden data not found at {golden_path}. Run generate_golden_fixtures.py first."
+        )
+
+    return torch.load(golden_path)
+
+
+@pytest.fixture
+def things_golden_data(fixtures_dir: Path) -> dict[str, Any]:
+    """Load golden data for Things metrics.
+
+    Returns:
+        Dict with:
+        - img1: First image tensors
+        - img2: Second image tensors
+        - img3: Third image tensors
+        - choice: Choice (outlier) relative paths per sample
+        - img1_relpaths: Image-1 relative paths per sample
+        - img2_relpaths: Image-2 relative paths per sample
+        - img3_relpaths: Image-3 relative paths per sample
+        - features_img1: Features for img1 per layer
+        - features_img2: Features for img2 per layer
+        - features_img3: Features for img3 per layer
+        - expected_accuracy: Expected accuracy per layer
+    """
+    golden_path = fixtures_dir / "things_golden.pt"
 
     if not golden_path.exists():
         pytest.skip(

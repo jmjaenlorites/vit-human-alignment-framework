@@ -140,10 +140,33 @@ class ResultsStore:
         record: pd.Series,
         experiment: ResolvedExperiment,
     ) -> None:
-        if record["config_hash"] != experiment.config_hash:
-            raise ValueError(
-                f"Existing result for run_key '{experiment.run_key}' has a different config_hash"
-            )
+        if record["config_hash"] == experiment.config_hash:
+            return
+        message = "\n".join(
+            [
+                f"Config hash mismatch for run_key {experiment.run_key!r}.",
+                f"  model        : {experiment.model_name}",
+                f"  experiment   : {experiment.experiment_id}   "
+                f"(metric={experiment.metric_name})",
+                f"  stored hash  : {record['config_hash']}   "
+                f"(status={record['status']})",
+                f"  current hash : {experiment.config_hash}   "
+                f"(config={experiment.config})",
+                "Why this happens: the effective config (defaults + "
+                "dataset_defaults[<family>] + per-experiment config) for this",
+                "metric differs from the one used when the existing row was "
+                "written. The runner refuses to mix results across configs.",
+                f"How to fix it (in {self.csv_path}):",
+                "  - delete this row to recompute with the current config, OR",
+                f"  - update its `config_hash` to {experiment.config_hash!r} "
+                "if you trust the existing result for the new config (e.g.",
+                "    only batch_size or dataset paths changed and the metric "
+                "is invariant to that), OR",
+                "  - revert the JSON change so the effective config matches "
+                "the stored hash again.",
+            ]
+        )
+        raise ValueError(message)
 
     def _load_or_create(self) -> pd.DataFrame:
         try:

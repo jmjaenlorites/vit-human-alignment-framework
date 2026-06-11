@@ -166,12 +166,13 @@ class TIDMetricsCalculator(BaseMetricCalculator):
         self, transform: Optional[Callable[[Any], Any]] = None
     ) -> TID2013TorchDatasetLoader:
         """Carga dataset TID2013."""
+        num_workers = 0 if self._backend == BackendEnum.JAX else 2
         match self._backend:
             case BackendEnum.TORCH | BackendEnum.JAX:
                 return TID2013TorchDatasetLoader(
                     batch_size=32,
                     shuffle=False,
-                    num_workers=2,
+                    num_workers=num_workers,
                     transform=transform,
                     dataset_path=self._dataset_path,
                 )

@@ -23,3 +23,8 @@ dev = [
     "pytest>=8.0",
     "pytest-cov>=4.0",
 ]
+# `jax[cuda12]` solo tiene wheels para Linux x86_64. Activarlo en el server con
+# `uv sync --extra cuda`. macOS sigue cayendo a la wheel CPU sin pelearse.
+cuda = [
+    "jax[cuda12]>=0.8.1; sys_platform == 'linux' and platform_machine == 'x86_64'",
+]

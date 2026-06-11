@@ -25,6 +25,13 @@ def test_saliency_metric_spec_allows_json_config_keys() -> None:
     assert metric_spec.allowed_keys == {"dataset_path", "batch_size"}
 
 
+def test_things_metric_spec_exposes_family_and_allowed_keys() -> None:
+    metric_spec = get_metric_spec("things_triplet_accuracy")
+
+    assert metric_spec.family == "things"
+    assert metric_spec.allowed_keys == {"dataset_path", "batch_size"}
+
+
 def test_dataset_default_groups_match_metric_families() -> None:
     assert DATASET_DEFAULT_GROUPS == {
         "levels",
@@ -32,6 +39,7 @@ def test_dataset_default_groups_match_metric_families() -> None:
         "tid",
         "nights",
         "saliency",
+        "things",
     }
 
 

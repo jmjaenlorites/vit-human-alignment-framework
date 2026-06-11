@@ -37,10 +37,15 @@ class JSONExperimentSource:
                 "JSON config must include at least one experiment in 'experiments'"
             )
 
-        resolved_experiments: list[ResolvedExperiment] = []
         for model_name in models:
             validate_json_model_name(model_name)
 
+        # Validar y resolver primero la "plantilla" de experimentos (sin modelo).
+        # Luego producimos `(model, experiment)` con orden model-major: así el
+        # runner puede cargar un modelo, gastarlo en todas sus métricas y
+        # liberarlo antes de pasar al siguiente — evitando OOM cuando coexisten
+        # backends torch y jax en la misma GPU.
+        prepared: list[tuple[str, str, dict[str, Any]]] = []
         for experiment in experiments:
             experiment_dict = self._ensure_dict(
                 experiment,
@@ -64,8 +69,11 @@ class JSONExperimentSource:
             )
             effective_config = {**defaults, **dataset_config, **experiment_config}
             validate_metric_config(metric_name, effective_config)
+            prepared.append((experiment_id, metric_name, effective_config))
 
-            for model_name in models:
+        resolved_experiments: list[ResolvedExperiment] = []
+        for model_name in models:
+            for experiment_id, metric_name, effective_config in prepared:
                 resolved_experiments.append(
                     ResolvedExperiment.from_parts(
                         experiment_id=experiment_id,

@@ -209,12 +209,13 @@ class LevelsMetricsCalculator(BaseMetricCalculator):
         El loader es Torch para todos los backends; la ingesta no depende del
         backend numérico del modelo.
         """
+        num_workers = 0 if self._backend == BackendEnum.JAX else 2
         match self._backend:
             case BackendEnum.TORCH | BackendEnum.JAX:
                 return LevelsTorchDatasetLoader(
                     batch_size=32,
                     shuffle=False,
-                    num_workers=2,
+                    num_workers=num_workers,
                     split=self.split,
                     transform=transform,
                     levels_path=self._levels_path,

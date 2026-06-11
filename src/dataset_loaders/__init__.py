@@ -10,6 +10,10 @@ from .saliency import (
     SaliencyMIT1003DatasetLoader,
     SaliencyMIT1003TorchDatasetLoader,
 )
+from .things import (
+    ThingsDatasetLoader,
+    ThingsTorchDatasetLoader,
+)
 from .tid import (
     TID2013DatasetLoader,
     TID2013TorchDatasetLoader,
@@ -24,4 +28,6 @@ __all__ = [
     "LevelsTorchDatasetLoader",
     "NightsDatasetLoader",
     "NightsTorchDatasetLoader",
+    "ThingsDatasetLoader",
+    "ThingsTorchDatasetLoader",
 ]

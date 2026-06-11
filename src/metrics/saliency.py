@@ -151,12 +151,15 @@ class SaliencyMetricsCalculator(BaseMetricCalculator):
         adaptador (p.ej. el JAX) convierte los tensores torch a su backend en
         el `forward`.
         """
+        # JAX es multi-thread; el fork de DataLoader (num_workers>0) puede
+        # provocar deadlocks. Para JAX deshabilitamos workers paralelos.
+        num_workers = 0 if self._backend == BackendEnum.JAX else self._num_workers
         match self._backend:
             case BackendEnum.TORCH | BackendEnum.JAX:
                 return SaliencyMIT1003TorchDatasetLoader(
                     batch_size=self._batch_size,
                     shuffle=False,
-                    num_workers=self._num_workers,
+                    num_workers=num_workers,
                     transform=transform,
                     dataset_path=self._dataset_path,
                 )

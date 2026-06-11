@@ -10,6 +10,9 @@
     "visturing": {
       "data_path": "tests/data/visturing",
       "gt_path": "tests/data/visturing"
+    },
+    "things": {
+      "dataset_path": "tests/data/things"
     }
   },
   "models": [
@@ -30,6 +33,10 @@
     {
       "experiment_id": "visturing-csf",
       "metric": "visturing_csf_pearson"
+    },
+    {
+      "experiment_id": "things-triplet-accuracy",
+      "metric": "things_triplet_accuracy"
     }
   ]
 }

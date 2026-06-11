@@ -61,8 +61,18 @@ def test_results_store_detects_config_hash_mismatch(tmp_path) -> None:
 
     store.mark_done(experiment, result="[1.0]")
 
-    with pytest.raises(ValueError, match="config_hash"):
+    with pytest.raises(ValueError) as exc_info:
         store.should_run(changed)
+
+    msg = str(exc_info.value)
+    # El mensaje debe incluir contexto suficiente para resolverlo a mano.
+    assert "Config hash mismatch" in msg
+    assert experiment.run_key in msg
+    assert experiment.model_name in msg
+    assert experiment.experiment_id in msg
+    assert "stored hash" in msg and "current hash" in msg
+    assert "delete this row" in msg
+    assert str(tmp_path / "results.csv") in msg
 
 
 def test_results_store_writes_expected_columns(tmp_path) -> None:
