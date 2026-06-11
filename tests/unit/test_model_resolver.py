@@ -140,6 +140,7 @@ def test_resolve_model_forces_random_initialization_for_random_timm_prefix(
     assert captured["timm_model_name"] == "vit_base_patch16_224"
     assert captured["config"] == {
         "force_random_init": True,
+        "random_seed": 0,
         "display_name": "timm-random::vit_base_patch16_224",
     }
 
@@ -184,3 +185,46 @@ def test_dynamic_timm_adapter_ignores_pretrained_weights_when_random_is_forced(
     assert adapter.transform == "fake-transform"
     assert captured["model_name"] == "vit_base_patch16_224"
     assert captured["pretrained"] is False
+
+
+def test_dynamic_timm_adapter_uses_deterministic_seed_for_forced_random(
+    monkeypatch,
+) -> None:
+    import torch
+
+    class FakeTimmModel:
+        def eval(self):
+            return self
+
+        def to(self, device):
+            return self
+
+    captured = {}
+
+    def fake_create_model(model_name: str, pretrained: bool, cache_dir):
+        captured["initial_seed"] = torch.initial_seed()
+        return FakeTimmModel()
+
+    monkeypatch.setattr(
+        "src.models.vit_b16.list_pretrained_timm_models",
+        lambda: {"vit_base_patch16_224"},
+    )
+    monkeypatch.setattr("src.models.vit_b16.timm.create_model", fake_create_model)
+    monkeypatch.setattr(
+        "src.models.vit_b16.timm.data.resolve_data_config",
+        lambda *args, **kwargs: {},
+    )
+    monkeypatch.setattr(
+        "src.models.vit_b16.timm.data.create_transform",
+        lambda *args, **kwargs: "fake-transform",
+    )
+    torch.manual_seed(999)
+    state_before = torch.random.get_rng_state()
+
+    DynamicTimmModelAdapter(
+        "vit_base_patch16_224",
+        config={"force_random_init": True, "random_seed": 123},
+    )
+
+    assert captured["initial_seed"] == 123
+    assert torch.equal(torch.random.get_rng_state(), state_before)

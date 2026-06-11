@@ -8,6 +8,12 @@ The smoke artifact lives in `review_artifact/` and intentionally uses fake model
 resolution plus deterministic fake metric outputs. It still runs the real JSON
 experiment source and `results.csv` persistence/resume path.
 
+Reviewer-facing contract details are specified in:
+
+- `review_artifact/TECHNICAL_SPEC.md`;
+- `review_artifact/MANIFEST.md`;
+- `review_artifact/dataset_units.csv`.
+
 ## Setup
 
 From the repository root:
@@ -85,11 +91,29 @@ ssh deep.uv.es "cd ~/vit-human-alignment-framework/ && /media/disk/users/jmjaen/
 By default, `main.py` runs the JSON model-battery configuration currently wired
 in the repository and persists to `results-model-battery.csv`. The same entry
 point can run another JSON configuration through environment variables. For the
-saliency random-ViT baseline configuration:
+framework random-ViT baseline configuration:
 
 ```bash
-ssh deep.uv.es "cd ~/vit-human-alignment-framework/ && VIT_ALIGNMENT_JSON_PATH=data/experiments.saliency-baselines.json VIT_ALIGNMENT_RESULTS_PATH=results-saliency-baselines.csv /media/disk/users/jmjaen/.local/bin/uv run main.py"
+ssh deep.uv.es "cd ~/vit-human-alignment-framework/ && VIT_ALIGNMENT_JSON_PATH=data/experiments.framework-baselines.json VIT_ALIGNMENT_RESULTS_PATH=results-framework-baselines.csv /media/disk/users/jmjaen/.local/bin/uv run main.py"
 ```
+
+The older saliency-only baseline configuration remains available as
+`data/experiments.saliency-baselines.json` because it produced the committed
+`results-saliency-baselines.csv` table used as the first framework-native
+baseline run.
+
+Forced-random timm baselines use a deterministic seed during model creation
+(`random_seed=0`) and restore the process RNG state afterwards. Use a fresh
+output file when comparing against results produced before that deterministic
+contract existed.
+
+The committed `results-framework-baselines-seed0.csv` contains the completed
+seeded controls for saliency AUC-Judd, TID Spearman MOS, NIGHTS preference
+accuracy, THINGS triplet accuracy, and LEVELS between-class accuracy. The same
+run hit a non-destructive `Broken pipe` error on `levels-class-border-random-vit`
+before reaching the remaining rows; those unfinished controls should be
+recomputed from `data/experiments.framework-baselines.json` before making claims
+about all baseline families.
 
 Confirm the dataset paths and checkpoint availability on the server before
 launching any full experiment.

@@ -104,6 +104,7 @@ def resolve_model(model_name: str) -> BaseModelAdapter:
             timm_model_name,
             config={
                 "force_random_init": True,
+                "random_seed": 0,
                 "display_name": f"{random_prefix}{timm_model_name}",
             },
         )

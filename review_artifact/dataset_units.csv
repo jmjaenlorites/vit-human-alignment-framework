@@ -1,0 +1,7 @@
+family,dataset_or_task,human_signal,primary_metric,experimental_unit,baseline_or_chance
+saliency,MIT1003 fixation/saliency targets,human fixation and saliency maps,AUC-Judd or Pearson,image,"random/untrained ViT; center-bias or classical saliency controls when recomputed"
+tid,TID2013 distorted-reference pairs,mean opinion scores (MOS),Spearman correlation,distorted/reference pair,random/untrained ViT
+nights,NIGHTS preference task,human preference choice,preference accuracy,preference trial,chance level 0.5 and random/untrained ViT
+things,THINGS object-similarity triplets,human odd-one-out triplet judgement,triplet accuracy,triplet trial,chance level 1/3 and random/untrained ViT
+levels,LEVELS similarity triplets,human odd-one-out triplet judgement by abstraction split,triplet accuracy,triplet trial,chance level 1/3 and random/untrained ViT
+custom_psychophysics,Weber-law subtest,psychophysical response curve,Pearson or Kendall agreement,condition or trial,null/chance curve and random/untrained ViT

@@ -48,6 +48,7 @@ class TimmViTAdapter(BaseModelAdapter):
     def _load_model(self, config: dict[str, Any]) -> Any:
         has_pretrained_weights = self.MODEL_NAME in list_pretrained_timm_models()
         force_random_init = bool(config.get("force_random_init", False))
+        random_seed = int(config.get("random_seed", 0))
         if self.REQUIRE_PRETRAINED and not has_pretrained_weights and not force_random_init:
             raise ValueError(
                 f"Model {self.MODEL_NAME} requires pretrained timm weights, but none are available"
@@ -55,8 +56,10 @@ class TimmViTAdapter(BaseModelAdapter):
 
         if force_random_init:
             logger.warning(
-                "Model %s requested with random initialization; pretrained weights are ignored",
+                "Model %s requested with random initialization; pretrained weights "
+                "are ignored and seed %s is used",
                 self.MODEL_NAME,
+                random_seed,
             )
         elif not self.REQUIRE_PRETRAINED and not has_pretrained_weights:
             logger.warning(
@@ -64,11 +67,19 @@ class TimmViTAdapter(BaseModelAdapter):
                 self.MODEL_NAME,
             )
 
-        model = timm.create_model(
-            self.MODEL_NAME,
-            pretrained=has_pretrained_weights and not force_random_init,
-            cache_dir=get_checkpoint_cache_dir(),
-        )
+        rng_state = None
+        if force_random_init:
+            rng_state = torch.random.get_rng_state()
+            torch.manual_seed(random_seed)
+        try:
+            model = timm.create_model(
+                self.MODEL_NAME,
+                pretrained=has_pretrained_weights and not force_random_init,
+                cache_dir=get_checkpoint_cache_dir(),
+            )
+        finally:
+            if rng_state is not None:
+                torch.random.set_rng_state(rng_state)
         model.eval()
         return model.to(self.device)
 

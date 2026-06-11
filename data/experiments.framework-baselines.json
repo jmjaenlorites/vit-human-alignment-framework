@@ -1,0 +1,72 @@
+{
+  "defaults": {},
+  "dataset_defaults": {
+    "levels": {
+      "batch_size": 8
+    },
+    "visturing": {
+      "batch_size": 8,
+      "data_path": "tests/data/visturing",
+      "gt_path": "tests/data/visturing"
+    },
+    "tid": {
+      "batch_size": 8
+    },
+    "nights": {
+      "batch_size": 8
+    },
+    "things": {
+      "batch_size": 8
+    },
+    "saliency": {
+      "batch_size": 8
+    }
+  },
+  "models": [
+    "timm-random::vit_base_patch16_224"
+  ],
+  "experiments": [
+    {
+      "experiment_id": "saliency-auc-judd-random-vit",
+      "metric": "saliency_auc_judd"
+    },
+    {
+      "experiment_id": "tid-spearman-mos-random-vit",
+      "metric": "tid_spearman_mos"
+    },
+    {
+      "experiment_id": "nights-preference-accuracy-random-vit",
+      "metric": "nights_preference_accuracy"
+    },
+    {
+      "experiment_id": "things-triplet-accuracy-random-vit",
+      "metric": "things_triplet_accuracy"
+    },
+    {
+      "experiment_id": "levels-between-class-random-vit",
+      "metric": "levels_triplet_accuracy",
+      "config": {
+        "split": "between_class"
+      }
+    },
+    {
+      "experiment_id": "levels-class-border-random-vit",
+      "metric": "levels_triplet_accuracy",
+      "config": {
+        "split": "class_border"
+      }
+    },
+    {
+      "experiment_id": "levels-within-class-random-vit",
+      "metric": "levels_triplet_accuracy",
+      "config": {
+        "split": "within_class"
+      }
+    },
+    {
+      "experiment_id": "psychophysics-weber-law-pearson-random-vit",
+      "metric": "visturing_weber_law_pearson"
+    }
+  ]
+}
+
