@@ -1,0 +1,35 @@
+{
+  "defaults": {
+    "batch_size": 2
+  },
+  "dataset_defaults": {
+    "levels": {
+      "levels_path": "tests/data/levels",
+      "imagenet_path": "tests/data/levels/images"
+    },
+    "visturing": {
+      "data_path": "tests/data/visturing",
+      "gt_path": "tests/data/visturing/ground_truth"
+    }
+  },
+  "models": [
+    "vit-b16"
+  ],
+  "experiments": [
+    {
+      "experiment_id": "levels-between-fixture",
+      "metric": "levels_triplet_accuracy",
+      "config": {
+        "split": "between_class"
+      }
+    },
+    {
+      "experiment_id": "visturing-frequency-low",
+      "metric": "visturing_frequency_masking_kendall",
+      "config": {
+        "freq": "low",
+        "mask_freq": "1p5"
+      }
+    }
+  ]
+}

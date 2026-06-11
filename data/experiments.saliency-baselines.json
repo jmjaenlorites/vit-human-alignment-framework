@@ -1,0 +1,21 @@
+{
+  "defaults": {},
+  "dataset_defaults": {
+    "saliency": {
+      "batch_size": 8
+    }
+  },
+  "models": [
+    "timm-random::vit_base_patch16_224"
+  ],
+  "experiments": [
+    {
+      "experiment_id": "saliency-auc-judd-random-vit",
+      "metric": "saliency_auc_judd"
+    },
+    {
+      "experiment_id": "saliency-pearson-random-vit",
+      "metric": "saliency_pearson_correlation_coefficient"
+    }
+  ]
+}

@@ -1,0 +1,235 @@
+{
+  "schema_version": "1.0",
+  "artifact_id": "saliency_mit1003_reference",
+  "created_at": "2026-06-11",
+  "dataset": {
+    "name": "MIT1003",
+    "expected_image_count": 1003
+  },
+  "status_definitions": {
+    "reference_from_legacy_repo": "Value copied from the sibling ViT-saliency-alignment repository for provenance and sanity checks only.",
+    "framework_recomputed": "Value recomputed by this repository's current framework and eligible for paper tables after review."
+  },
+  "artifact_status": "reference_from_legacy_repo",
+  "publication_policy": {
+    "paper_tables_must_prefer": "framework_recomputed",
+    "reference_values_use": "sanity_check_and_provenance_bridge",
+    "reference_values_publication_status": "not_for_final_paper_tables_without_framework_recompute"
+  },
+  "metric_name_mapping": {
+    "AUC_Judd": {
+      "framework_metric": "saliency_auc_judd",
+      "mapping_status": "mapped_current_framework_metric"
+    },
+    "Correlation_Pearson": {
+      "framework_metric": "saliency_pearson_correlation_coefficient",
+      "mapping_status": "mapped_current_framework_metric"
+    },
+    "NSS": {
+      "framework_metric": null,
+      "mapping_status": "legacy_reference_only",
+      "reason": "NSS is not registered as a current framework saliency metric in this repository."
+    },
+    "KL_divergence": {
+      "framework_metric": null,
+      "mapping_status": "legacy_reference_only",
+      "reason": "KL divergence is not registered as a current framework saliency metric in this repository."
+    },
+    "InfoGain": {
+      "framework_metric": null,
+      "mapping_status": "legacy_reference_only",
+      "reason": "Information gain is not registered as a current framework saliency metric in this repository."
+    },
+    "discard": {
+      "framework_metric": null,
+      "mapping_status": "legacy_reference_only",
+      "reason": "Legacy CSV column retained only to preserve the original row values."
+    }
+  },
+  "provenance": {
+    "source_repository": {
+      "name": "ViT-saliency-alignment",
+      "absolute_path_at_capture": "/Users/jmjaenlorites/PhD/ViT-Alignment/ViT-saliency-alignment",
+      "relationship": "sibling_local_repository"
+    },
+    "capture_method": "Manual provenance capture from legacy aggregate CSV plus source file hashes; binary .npy files were not copied into this repository.",
+    "legacy_source_files": [
+      {
+        "path": "/Users/jmjaenlorites/PhD/ViT-Alignment/ViT-saliency-alignment/saliency_baselines.csv",
+        "role": "aggregate_baseline_table",
+        "sha256": "74606f8430894c01d2e380c30d0bf12381c0aee6174d60f71a503fe990cb3883",
+        "bytes": 554,
+        "copied_into_this_repo": false
+      },
+      {
+        "path": "/Users/jmjaenlorites/PhD/ViT-Alignment/ViT-saliency-alignment/metrics/itti_saliency_maps_metrics_density.npy",
+        "role": "legacy_aggregate_and_per_image_density_values",
+        "baseline_id": "itti_saliency_maps",
+        "reported_per_image_count": 1003,
+        "sha256": "7712f29f1a1e671905ad91bddb0367b9507fdc42d2e4ef54dba6c7bbee8fbcee",
+        "bytes": 144316,
+        "copied_into_this_repo": false
+      },
+      {
+        "path": "/Users/jmjaenlorites/PhD/ViT-Alignment/ViT-saliency-alignment/metrics/judd_saliency_py_metrics_density.npy",
+        "role": "legacy_aggregate_and_per_image_density_values",
+        "baseline_id": "judd_saliency_py",
+        "reported_per_image_count": 1003,
+        "sha256": "ef2638152bf83fa4c9c77bf1d422af95b8992f2ef70a3f373368209cc0033161",
+        "bytes": 144316,
+        "copied_into_this_repo": false
+      }
+    ]
+  },
+  "baselines": [
+    {
+      "baseline_id": "itti_saliency_maps",
+      "legacy_name": "IttiSaliencyMaps",
+      "dataset": "MIT1003",
+      "row_source": "saliency_baselines.csv",
+      "status": "reference_from_legacy_repo",
+      "framework_recomputed_status": "not_recomputed",
+      "values": {
+        "saliency_auc_judd": {
+          "value": 0.5848,
+          "legacy_metric_name": "AUC_Judd",
+          "status": "reference_from_legacy_repo"
+        },
+        "saliency_pearson_correlation_coefficient": {
+          "value": 0.1193,
+          "legacy_metric_name": "Correlation_Pearson",
+          "status": "reference_from_legacy_repo"
+        },
+        "legacy_nss": {
+          "value": 0.4829,
+          "legacy_metric_name": "NSS",
+          "status": "reference_from_legacy_repo"
+        },
+        "legacy_kl_divergence": {
+          "value": 2.9545,
+          "legacy_metric_name": "KL_divergence",
+          "status": "reference_from_legacy_repo"
+        },
+        "legacy_discard": {
+          "value": 0.2479,
+          "legacy_metric_name": "discard",
+          "status": "reference_from_legacy_repo"
+        }
+      },
+      "per_image_source": {
+        "path": "/Users/jmjaenlorites/PhD/ViT-Alignment/ViT-saliency-alignment/metrics/itti_saliency_maps_metrics_density.npy",
+        "reported_per_image_count": 1003,
+        "copied_into_this_repo": false
+      }
+    },
+    {
+      "baseline_id": "judd_saliency_py",
+      "legacy_name": "JuddSaliencyPy",
+      "dataset": "MIT1003",
+      "row_source": "saliency_baselines.csv",
+      "status": "reference_from_legacy_repo",
+      "framework_recomputed_status": "not_recomputed",
+      "values": {
+        "saliency_auc_judd": {
+          "value": 0.8048,
+          "legacy_metric_name": "AUC_Judd",
+          "status": "reference_from_legacy_repo"
+        },
+        "saliency_pearson_correlation_coefficient": {
+          "value": 0.36,
+          "legacy_metric_name": "Correlation_Pearson",
+          "status": "reference_from_legacy_repo"
+        },
+        "legacy_information_gain": {
+          "value": -2.9637,
+          "legacy_metric_name": "InfoGain",
+          "status": "reference_from_legacy_repo"
+        },
+        "legacy_nss": {
+          "value": 1.1126,
+          "legacy_metric_name": "NSS",
+          "status": "reference_from_legacy_repo"
+        },
+        "legacy_kl_divergence": {
+          "value": 1.6414,
+          "legacy_metric_name": "KL_divergence",
+          "status": "reference_from_legacy_repo"
+        },
+        "legacy_discard": {
+          "value": 0.5157,
+          "legacy_metric_name": "discard",
+          "status": "reference_from_legacy_repo"
+        }
+      },
+      "per_image_source": {
+        "path": "/Users/jmjaenlorites/PhD/ViT-Alignment/ViT-saliency-alignment/metrics/judd_saliency_py_metrics_density.npy",
+        "reported_per_image_count": 1003,
+        "copied_into_this_repo": false
+      }
+    }
+  ],
+  "legacy_openclip_epoch0_reference": {
+    "status": "reference_provisional_legacy_local_results",
+    "source_glob": "/Users/jmjaenlorites/PhD/ViT-Alignment/ViT-saliency-alignment/metrics-3-0-exploring-openclip-checkpoints/*_MIT1003_per_epoch_metrics.csv",
+    "values_embedded": false,
+    "reason": "These random or untrained OpenCLIP epoch 0 values are legacy local results and must be recalculated through this framework before use in paper tables."
+  },
+  "framework_recomputed": {
+    "status": "partially_available",
+    "result_file": "results-saliency-baselines.csv",
+    "computed_at": "2026-06-11T09:28:22+00:00",
+    "execution_environment": "dedicated shared server via uv run main.py",
+    "model_baselines": [
+      {
+        "baseline_id": "timm_random_vit_base_patch16_224",
+        "model_name": "timm-random::vit_base_patch16_224",
+        "dataset": "MIT1003",
+        "status": "framework_recomputed",
+        "config_hash": "fc046d91d2e2a564a21b50cbdc73ff4cfe50221c35af239573f263c5b469a5cf",
+        "values": {
+          "saliency_auc_judd": {
+            "layerwise": [
+              0.5408384624203799,
+              0.556707642237068,
+              0.5601771278966103,
+              0.5666133258064627,
+              0.5726035173280408,
+              0.5708045780599296,
+              0.5701775904132029,
+              0.5690015557993683,
+              0.5692539227418861,
+              0.570981558854297,
+              0.5736194261733223,
+              0.5755741435770737
+            ],
+            "best": 0.5755741435770737,
+            "final": 0.5755741435770737,
+            "best_layer_index": 11,
+            "status": "framework_recomputed"
+          },
+          "saliency_pearson_correlation_coefficient": {
+            "layerwise": [
+              0.0692170019370526,
+              0.09178384981028162,
+              0.1003839371506463,
+              0.10737270027277657,
+              0.11208327499405502,
+              0.11309129811524148,
+              0.11284038128286959,
+              0.11138124754883355,
+              0.11107483649087851,
+              0.11359209081023462,
+              0.11475601956982524,
+              0.11591454088472418
+            ],
+            "best": 0.11591454088472418,
+            "final": 0.11591454088472418,
+            "best_layer_index": 11,
+            "status": "framework_recomputed"
+          }
+        }
+      }
+    ],
+    "expected_update": "Classical saliency baselines remain reference_from_legacy_repo until recomputed through this repository."
+  }
+}

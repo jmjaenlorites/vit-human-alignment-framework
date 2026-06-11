@@ -7,6 +7,7 @@
 - `03_csv_y_runner.md`: Esquema del CSV y comportamiento del runner.
 - `04_flujos_de_ejecucion.md`: Flujos de ejecución (Python) y puntos de extensión.
 - `05_roadmap.md`: Roadmap realista basado en lo ya implementado.
+- `baselines_saliency.md`: Procedencia y política de uso para baselines de saliency MIT1003.
 - `preguntas_abiertas.md`: Preguntas abiertas / decisiones de producto y diseño pendientes.
 
 ## Convenciones

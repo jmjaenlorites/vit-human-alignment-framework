@@ -47,12 +47,18 @@ class TimmViTAdapter(BaseModelAdapter):
 
     def _load_model(self, config: dict[str, Any]) -> Any:
         has_pretrained_weights = self.MODEL_NAME in list_pretrained_timm_models()
-        if self.REQUIRE_PRETRAINED and not has_pretrained_weights:
+        force_random_init = bool(config.get("force_random_init", False))
+        if self.REQUIRE_PRETRAINED and not has_pretrained_weights and not force_random_init:
             raise ValueError(
                 f"Model {self.MODEL_NAME} requires pretrained timm weights, but none are available"
             )
 
-        if not self.REQUIRE_PRETRAINED and not has_pretrained_weights:
+        if force_random_init:
+            logger.warning(
+                "Model %s requested with random initialization; pretrained weights are ignored",
+                self.MODEL_NAME,
+            )
+        elif not self.REQUIRE_PRETRAINED and not has_pretrained_weights:
             logger.warning(
                 "Model %s has no pretrained timm weights; loading random initialization",
                 self.MODEL_NAME,
@@ -60,7 +66,7 @@ class TimmViTAdapter(BaseModelAdapter):
 
         model = timm.create_model(
             self.MODEL_NAME,
-            pretrained=has_pretrained_weights,
+            pretrained=has_pretrained_weights and not force_random_init,
             cache_dir=get_checkpoint_cache_dir(),
         )
         model.eval()
@@ -278,6 +284,7 @@ class DynamicTimmModelAdapter(TimmViTAdapter):
     REQUIRE_PRETRAINED = False
 
     def __init__(self, timm_model_name: str, config: dict[str, Any] | None = None):
+        config = config or {}
         self.MODEL_NAME = timm_model_name
-        self.DISPLAY_NAME = timm_model_name
-        super().__init__(config or {})
+        self.DISPLAY_NAME = config.get("display_name", timm_model_name)
+        super().__init__(config)

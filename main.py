@@ -45,10 +45,18 @@ def setup_logging() -> None:
 
 def main() -> None:
     setup_logging()
+    json_path = os.environ.get(
+        "VIT_ALIGNMENT_JSON_PATH",
+        "data/experiments.timm.model-battery.json",
+    )
+    results_path = os.environ.get(
+        "VIT_ALIGNMENT_RESULTS_PATH",
+        "results-model-battery.csv",
+    )
     try:
         runner = Runner(
-            json_path="data/experiments.timm.model-battery.json",
-            results_path="results-model-battery.csv",
+            json_path=json_path,
+            results_path=results_path,
         )
         runner.execute()
     except Exception:

@@ -311,6 +311,34 @@ def test_json_source_accepts_timm_prefixed_model(tmp_path, monkeypatch) -> None:
     assert experiments[0].model_name == "timm::vit_base_patch16_224"
 
 
+def test_json_source_accepts_random_timm_prefixed_model(
+    tmp_path, monkeypatch
+) -> None:
+    config_path = tmp_path / "experiments.json"
+    config_path.write_text(
+        json.dumps(
+            {
+                "models": ["timm-random::vit_base_patch16_224"],
+                "experiments": [
+                    {
+                        "experiment_id": "saliency-auc",
+                        "metric": "saliency_auc_judd",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        "src.models.resolver.list_available_timm_models",
+        lambda: ["vit_base_patch16_224"],
+    )
+
+    experiments = JSONExperimentSource(str(config_path)).load()
+
+    assert experiments[0].model_name == "timm-random::vit_base_patch16_224"
+
+
 def test_json_source_accepts_timm_prefixed_pretrained_tag_model(
     tmp_path, monkeypatch
 ) -> None:
