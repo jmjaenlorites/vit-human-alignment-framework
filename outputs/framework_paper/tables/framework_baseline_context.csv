@@ -1,0 +1,16 @@
+experiment_id,metric_label,entry,kind,score,score_min,score_max,ci_lower,ci_upper
+saliency-auc-judd,Saliency AUC-Judd,Trained ViTs,range,0.6008550840191328,0.5200673932226325,0.7199783576420273,,
+saliency-auc-judd,Saliency AUC-Judd,Center Gaussian,point,0.8310278060429117,,,0.8325142006351727,0.8381517953242167
+saliency-auc-judd,Saliency AUC-Judd,Uniform,point,0.5029303257020259,,,0.5053657348290947,0.5142625553667145
+saliency-auc-judd,Saliency AUC-Judd,Random ViT,point,0.5778862001116231,,,0.5767871671866027,0.5876996855179994
+tid-spearman-mos,TID Spearman MOS,Trained ViTs,range,0.8035827600321315,0.7406011014644823,0.8303052384532084,,
+tid-spearman-mos,TID Spearman MOS,Random ViT,point,0.6816385350741805,,,0.6649999005251616,0.703286274756209
+tid-spearman-mos,TID Spearman MOS,MOS permutation,null,0.0401898334335554,,,0.0116941585269253,0.0523173673301163
+nights-preference-accuracy,NIGHTS preference,Trained ViTs,range,0.7686947399970029,0.7203656526300015,0.7894500224786453,,
+nights-preference-accuracy,NIGHTS preference,Random ViT,point,0.6351466107198162,,,0.6349967530845697,0.6436385433837855
+nights-preference-accuracy,NIGHTS preference,Label permutation,null,0.5082671462110995,,,0.5022715919876117,0.5101665917378491
+nights-preference-accuracy,NIGHTS preference,Chance (0.5),chance,0.5,,,,
+levels-between-class,LEVELS between class,Trained ViTs,range,0.4478924492065096,0.42595774790255736,0.49620944101890224,,
+levels-between-class,LEVELS between class,Random ViT,point,0.3684423329627009,,,0.36995855655514,0.3811786111391893
+levels-between-class,LEVELS between class,Label permutation,null,0.3389265136965531,,,0.3358940665116749,0.3465101586980693
+levels-between-class,LEVELS between class,Chance (0.333),chance,0.3333333333333333,,,,

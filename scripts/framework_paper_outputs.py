@@ -87,6 +87,12 @@ BASELINE_METRIC_NAMES = {
     "levels_triplet_accuracy",
 }
 
+ACCURACY_METRIC_NAMES = {
+    "nights_preference_accuracy",
+    "things_triplet_accuracy",
+    "levels_triplet_accuracy",
+}
+
 LINE_STYLES = ["-", "--", "-.", ":"]
 MARKERS = ["o", "s", "^", "D", "P", "X"]
 
@@ -152,6 +158,12 @@ def main() -> None:
     )
     if baseline_table is not None:
         baseline_table.to_csv(tables_dir / "framework_baselines_with_ci.csv", index=False)
+        baseline_context = build_baseline_context_table(selected_scores, baseline_table)
+        baseline_context.to_csv(tables_dir / "framework_baseline_context.csv", index=False)
+        plot_baseline_context(
+            baseline_context,
+            output_path=figures_dir / "framework_main_baseline_context_2x2.png",
+        )
 
     write_optional_summary(
         results_path=args.rollout_results,
@@ -465,6 +477,169 @@ def build_baseline_table(
     table = table[table["metric_name"].isin(BASELINE_METRIC_NAMES)].copy()
     table["reference"] = table["metric_name"].map(reference_for_metric)
     return table.sort_values(["metric_label", "model_name"])
+
+
+def build_baseline_context_table(
+    selected_scores: pd.DataFrame,
+    baseline_table: pd.DataFrame,
+) -> pd.DataFrame:
+    rows: list[dict[str, Any]] = []
+    for experiment_id in CENTRAL_METRICS:
+        trained = selected_scores[selected_scores["experiment_id"] == experiment_id]
+        if trained.empty:
+            continue
+        rows.append(
+            {
+                "experiment_id": experiment_id,
+                "metric_label": METRIC_LABELS.get(experiment_id, experiment_id),
+                "entry": "Trained ViTs",
+                "kind": "range",
+                "score": float(trained["best_score"].median()),
+                "score_min": float(trained["best_score"].min()),
+                "score_max": float(trained["best_score"].max()),
+                "ci_lower": np.nan,
+                "ci_upper": np.nan,
+            }
+        )
+        baseline_rows = baseline_table[baseline_table["experiment_id"] == experiment_id]
+        for _, baseline in baseline_rows.iterrows():
+            rows.append(
+                {
+                    "experiment_id": experiment_id,
+                    "metric_label": METRIC_LABELS.get(experiment_id, experiment_id),
+                    "entry": short_baseline_label(str(baseline["model_name"])),
+                    "kind": "point",
+                    "score": float(baseline["best_score"]),
+                    "score_min": np.nan,
+                    "score_max": np.nan,
+                    "ci_lower": float(baseline["best_ci_lower"]),
+                    "ci_upper": float(baseline["best_ci_upper"]),
+                }
+            )
+            if not pd.isna(baseline.get("null_score", np.nan)):
+                rows.append(
+                    {
+                        "experiment_id": experiment_id,
+                        "metric_label": METRIC_LABELS.get(experiment_id, experiment_id),
+                        "entry": null_label(str(baseline["metric_name"])),
+                        "kind": "null",
+                        "score": float(baseline["null_score"]),
+                        "score_min": np.nan,
+                        "score_max": np.nan,
+                        "ci_lower": float(baseline["null_ci_lower"]),
+                        "ci_upper": float(baseline["null_ci_upper"]),
+                    }
+                )
+        chance = chance_for_experiment(experiment_id)
+        if chance is not None:
+            rows.append(
+                {
+                    "experiment_id": experiment_id,
+                    "metric_label": METRIC_LABELS.get(experiment_id, experiment_id),
+                    "entry": f"Chance ({chance:.3g})",
+                    "kind": "chance",
+                    "score": chance,
+                    "score_min": np.nan,
+                    "score_max": np.nan,
+                    "ci_lower": np.nan,
+                    "ci_upper": np.nan,
+                }
+            )
+    return pd.DataFrame(rows)
+
+
+def plot_baseline_context(context: pd.DataFrame, *, output_path: Path) -> None:
+    fig, axes = plt.subplots(2, 2, figsize=(12.5, 8.5))
+    axes_flat = np.ravel(axes)
+    colors = {
+        "range": "#4c78a8",
+        "point": "#f58518",
+        "null": "#6f6f6f",
+        "chance": "#9a9a9a",
+    }
+    for panel_idx, (ax, experiment_id) in enumerate(zip(axes_flat, CENTRAL_METRICS)):
+        panel = context[context["experiment_id"] == experiment_id].copy()
+        if panel.empty:
+            ax.axis("off")
+            continue
+        panel = panel.reset_index(drop=True)
+        y_positions = np.arange(len(panel))[::-1]
+        for y, (_, row) in zip(y_positions, panel.iterrows()):
+            kind = row["kind"]
+            color = colors.get(kind, "black")
+            if kind == "range":
+                ax.hlines(
+                    y,
+                    row["score_min"],
+                    row["score_max"],
+                    color=color,
+                    linewidth=5,
+                    alpha=0.55,
+                )
+                ax.plot(row["score"], y, marker="o", color=color, markersize=7)
+            elif kind == "chance":
+                ax.axvline(row["score"], color=color, linestyle=":", linewidth=1.6)
+                ax.plot(row["score"], y, marker="|", color=color, markersize=11)
+            else:
+                interval_low = min(row["score"], row["ci_lower"], row["ci_upper"])
+                interval_high = max(row["score"], row["ci_lower"], row["ci_upper"])
+                lower = row["score"] - interval_low
+                upper = interval_high - row["score"]
+                if pd.isna(lower) or pd.isna(upper):
+                    ax.plot(row["score"], y, marker="o", color=color, markersize=7)
+                else:
+                    ax.errorbar(
+                        row["score"],
+                        y,
+                        xerr=np.array([[lower], [upper]]),
+                        fmt="o",
+                        color=color,
+                        capsize=3,
+                        linewidth=1.3,
+                        markersize=6,
+                    )
+        ax.set_yticks(y_positions)
+        ax.set_yticklabels(panel["entry"])
+        ax.set_xlabel("Best-layer score")
+        panel_label = chr(ord("a") + panel_idx)
+        ax.set_title(f"({panel_label}) {METRIC_LABELS.get(experiment_id, experiment_id)}")
+        ax.grid(axis="x", alpha=0.25, linewidth=0.5)
+        ax.margins(x=0.08, y=0.18)
+    fig.suptitle("Baseline context for the four central metrics", y=0.995, fontsize=14)
+    fig.tight_layout(rect=(0, 0, 1, 0.97))
+    fig.savefig(output_path, dpi=300)
+    plt.close(fig)
+
+
+def short_baseline_label(model_name: str) -> str:
+    if model_name == "timm-random::vit_base_patch16_224":
+        return "Random ViT"
+    if model_name == "saliency-baseline::uniform":
+        return "Uniform"
+    if model_name == "saliency-baseline::center-gaussian":
+        return "Center Gaussian"
+    return MODEL_LABELS.get(model_name, model_name)
+
+
+def null_label(metric_name: str) -> str:
+    if metric_name == "tid_spearman_mos":
+        return "MOS permutation"
+    if metric_name in ACCURACY_METRIC_NAMES:
+        return "Label permutation"
+    return "Null"
+
+
+def chance_for_experiment(experiment_id: str) -> float | None:
+    if experiment_id == "nights-preference-accuracy":
+        return 0.5
+    if experiment_id in {
+        "things-triplet-accuracy",
+        "levels-between-class",
+        "levels-class-border",
+        "levels-within-class",
+    }:
+        return 1 / 3
+    return None
 
 
 def write_optional_summary(
