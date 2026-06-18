@@ -1,0 +1,35 @@
+{
+  "defaults": {
+    "batch_size": 32
+  },
+  "dataset_defaults": {
+    "levels": {
+      "levels_path": "tests/data/levels",
+      "imagenet_path": "tests/data/levels/images"
+    },
+    "visturing": {
+      "data_path": "tests/data/visturing",
+      "gt_path": "tests/data/visturing"
+    }
+  },
+  "models": [
+    "vit-b16"
+  ],
+  "experiments": [
+    {
+      "experiment_id": "levels-between-class",
+      "metric": "levels_triplet_accuracy",
+      "config": {
+        "split": "between_class"
+      }
+    },
+    {
+      "experiment_id": "visturing-spectral-sensitivity",
+      "metric": "visturing_spectral_sensitivity"
+    },
+    {
+      "experiment_id": "visturing-csf",
+      "metric": "visturing_csf_pearson"
+    }
+  ]
+}

@@ -10,7 +10,8 @@ tests/
 ├── data/                          # Minimal test datasets
 │   ├── tid/                      # TID2013 test data
 │   ├── levels/                   # Levels test data
-│   └── nights/                   # Nights test data
+│   ├── nights/                   # Nights test data
+│   └── visturing/                # VisTuring test data
 ├── fixtures/                      # Golden data (generated)
 │   ├── saliency_golden.pt
 │   ├── tid_golden.pt
@@ -20,10 +21,12 @@ tests/
 │   ├── test_saliency_metrics.py
 │   ├── test_tid_metrics.py
 │   ├── test_levels_metrics.py
-│   └── test_nights_metrics.py
+│   ├── test_nights_metrics.py
+│   └── test_visturing_metrics.py
 └── integration/                   # Integration tests
     ├── test_saliency_calculator.py
-    └── test_perceptual_calculators.py
+    ├── test_perceptual_calculators.py
+    └── test_visturing_calculators.py
 ```
 
 ## Setup

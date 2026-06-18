@@ -41,6 +41,35 @@
 - `src/utils/`: enums, shared types, helpers.
 - `docs/`: Spanish design documentation.
 
+## JSON Experiment Config
+- The JSON experiment flow must remain backward-compatible with the legacy CSV flow.
+- Treat `src/runner/config_validation.py` as the current source of truth for JSON config validation.
+- Treat `src/runner/json_source.py` as the place where `defaults`, `dataset_defaults`, and per-experiment config are merged.
+- `dataset_defaults` is scoped by metric family (`levels`, `visturing`, `tid`, `nights`, `saliency`); do not mix family-specific keys into global `defaults`.
+- `results.csv` is only for the JSON flow; do not change legacy CSV persistence unless explicitly requested.
+- Validation errors should fail early and include valid options whenever the domain is closed.
+
+## Extending Metrics And Models
+- If you add a new metric, update all of the following together:
+  - metric loading in `src/metrics/__init__.py`
+  - JSON validation rules in `src/runner/config_validation.py`
+  - metric family resolution in `src/runner/json_source.py` if it belongs to a new family
+  - runner dispatch in `src/runner/base.py` if the execution path changes
+  - JSON validation tests in `tests/unit/test_json_experiment_source.py`
+  - runner tests in `tests/unit/test_runner_json.py` when config is consumed by calculators
+- Prefer one declarative source of truth for valid config keys and valid values; avoid scattering the same options across multiple files.
+- If a metric uses family-specific dataset paths, make sure the valid keys align with `dataset_defaults` and the calculator/factory signature.
+- For `visturing_*` metrics, avoid instantiating metric classes through the generic path if that would trigger default downloads or side effects.
+- If you add or expand model support, update both model resolution and model validation together.
+- If model support becomes dynamic (for example `timm` model names), add a dedicated resolver/registry abstraction instead of encoding the logic directly in many validation sites.
+
+## Agent Change Checklist
+- When adding a metric, do not stop at the metric class itself; wire validation, runner dispatch, and tests in the same change.
+- When adding config options, make sure invalid keys and invalid values produce actionable `ValueError` messages with allowed options.
+- When adding a new dataset family, update `dataset_defaults` handling and add tests proving the merge behavior.
+- When adding model aliases or new backends, add acceptance tests and invalid-input tests.
+- Prefer tests that prove no unintended downloads or generated artifacts happen during unit/integration runs.
+
 ## Python Version and Packaging
 - Use Python >= 3.13 features (pattern matching, unions).
 - Dependencies are managed in `pyproject.toml`.
@@ -147,6 +176,7 @@
 - Update `pyproject.toml` if dependencies change.
 - Run `uv sync` after adding dependencies.
 - Update `README.md` if usage changes.
+- Update JSON config validation and tests when adding metrics/models/config options.
 - Verify `uv run main.py` still works.
 - Note any breaking changes in your response.
 

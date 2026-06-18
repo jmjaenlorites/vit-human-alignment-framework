@@ -213,6 +213,13 @@ class BaseMetricCalculator(Protocol):
         # Reset metrics before starting
         for metric in self._metrics:
             metric.reset()
+            if hasattr(metric, "_load_ground_truth") and not getattr(
+                metric, "ground_truth_data", None
+            ):
+                try:
+                    metric._load_ground_truth()
+                except FileNotFoundError:
+                    pass
 
         # Process all batches - metrics accumulate state internally
         for batch in dataset_loader.get_iterator():
