@@ -1,0 +1,7 @@
+artifact_item,location,verification
+Anonymized review package,Online Resource 1,vit-human-alignment-review-artifact.zip; SHA256=2dbe69c0a6bc052896b755013551c88204e5913189a7425f7de17982735cf741; 165 files; 25315662 bytes
+Smoke command,review_artifact/smoke_json_runner.py,First pass runs two metrics; resume pass runs zero metrics
+Expected smoke output,review_artifact/expected_results.csv,Stable results.csv columns compared after volatile timing columns are removed
+Unit sidecar archives,review_artifact/unit_result_archives/,"Compressed sidecars for case study, baselines and sensitivity checks"
+Bootstrap/null summaries,outputs/bootstrap-framework-*/,Generated with 2000 resamples and seed 20260611
+Figure/table regeneration,scripts/framework_paper_outputs.py,"Regenerates main figures, supplementary grids, baseline context and contrast deltas"

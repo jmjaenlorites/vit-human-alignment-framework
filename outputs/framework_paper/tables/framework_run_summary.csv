@@ -1,0 +1,7 @@
+artifact_component,result_csv,result_rows,done_rows,unique_models,unique_experiments,unique_metric_implementations,duration_seconds_median,duration_seconds_iqr_low,duration_seconds_iqr_high,duration_seconds_total
+case_study,results-framework-case-study-v2.csv,48,48,6,8,6,74.5005,24.75275,261.483,19871.430999999997
+random_vit_baselines,results-framework-baselines-seed0-v3.csv,8,8,1,8,6,128.8185,40.49875,439.38875,3862.948
+saliency_spatial_baselines,results-framework-saliency-baselines.csv,4,4,2,2,2,12.865,12.797,13.108500000000001,52.162
+rollout_sensitivity,results-framework-rollout-sensitivity.csv,4,4,1,4,1,16.4165,16.03725,16.77675,65.59
+pooling_ablation,results-framework-pooling-ablation.csv,6,6,1,6,2,31.502000000000002,26.92375,35.391,187.994
+unit_sidecar_archives,review_artifact/unit_result_archives,5,5,,,,,,,

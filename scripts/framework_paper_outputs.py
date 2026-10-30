@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
 from pathlib import Path
@@ -12,6 +13,7 @@ from typing import Any
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+from scipy.stats import rankdata
 
 
 MODEL_GROUPS = {
@@ -68,11 +70,43 @@ CENTRAL_METRICS = [
     "levels-between-class",
 ]
 
+CONTRASTS = [
+    {
+        "factor": "Training recipe",
+        "contrast": "MAE - AugReg IN1k",
+        "reference": "timm::vit_base_patch16_224.augreg_in1k",
+        "comparison": "timm::vit_base_patch16_224.mae",
+    },
+    {
+        "factor": "Training recipe",
+        "contrast": "DINO - AugReg IN1k",
+        "reference": "timm::vit_base_patch16_224.augreg_in1k",
+        "comparison": "timm::vit_base_patch16_224.dino",
+    },
+    {
+        "factor": "Training recipe",
+        "contrast": "CLIP - AugReg IN1k",
+        "reference": "timm::vit_base_patch16_224.augreg_in1k",
+        "comparison": "timm::vit_base_patch16_clip_224.laion2b_ft_in1k",
+    },
+    {
+        "factor": "Dataset scale",
+        "contrast": "AugReg IN21k - AugReg IN1k",
+        "reference": "timm::vit_base_patch16_224.augreg_in1k",
+        "comparison": "timm::vit_base_patch16_224.augreg_in21k",
+    },
+    {
+        "factor": "Image resolution",
+        "contrast": "AugReg 384px - AugReg 224px",
+        "reference": "timm::vit_base_patch16_224.augreg_in1k",
+        "comparison": "timm::vit_base_patch16_384.augreg_in1k",
+    },
+]
+
 SUPPLEMENT_METRICS = [
     "saliency-auc-judd",
     "tid-spearman-mos",
     "nights-preference-accuracy",
-    "things-triplet-accuracy",
     "levels-between-class",
     "levels-class-border",
     "levels-within-class",
@@ -93,6 +127,27 @@ ACCURACY_METRIC_NAMES = {
     "levels_triplet_accuracy",
 }
 
+DELTA_TABLE_COLUMNS = [
+    "factor",
+    "contrast",
+    "metric_label",
+    "reference_model",
+    "comparison_model",
+    "final_delta",
+    "final_ci_lower",
+    "final_ci_upper",
+    "final_support",
+    "best_delta",
+    "best_ci_lower",
+    "best_ci_upper",
+    "best_support",
+    "n_units",
+    "reference_n_layers",
+    "comparison_n_layers",
+    "seed",
+    "n_bootstraps",
+]
+
 LINE_STYLES = ["-", "--", "-.", ":"]
 MARKERS = ["o", "s", "^", "D", "P", "X"]
 
@@ -111,6 +166,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--rollout-bootstrap-dir", type=Path)
     parser.add_argument("--pooling-results", type=Path)
     parser.add_argument("--pooling-bootstrap-dir", type=Path)
+    parser.add_argument("--case-unit-dir", type=Path)
+    parser.add_argument("--contrast-n-bootstraps", type=int, default=2000)
+    parser.add_argument("--contrast-seed", type=int, default=20260611)
     parser.add_argument("--output-dir", type=Path, default=Path("outputs/framework_paper"))
     return parser.parse_args()
 
@@ -129,28 +187,37 @@ def main() -> None:
     case_layerwise = attach_layer_ci(case_layerwise, case_layer_bootstrap)
     selected_scores = summarize_scores(case_layerwise, case_best_bootstrap)
     selected_scores.to_csv(tables_dir / "framework_selected_model_scores_with_ci.csv", index=False)
+    write_framework_run_summary(
+        case_results=args.case_results,
+        baseline_results=args.baseline_results,
+        saliency_baseline_results=args.saliency_baseline_results,
+        rollout_results=args.rollout_results,
+        pooling_results=args.pooling_results,
+        sidecar_archives_dir=Path("review_artifact/unit_result_archives"),
+        output_path=tables_dir / "framework_run_summary.csv",
+    )
+    write_artifact_verification_table(
+        output_path=tables_dir / "framework_artifact_verification.csv",
+    )
 
-    for group_name, models in MODEL_GROUPS.items():
-        plot_metric_grid(
-            case_layerwise,
-            models=models,
-            metrics=CENTRAL_METRICS,
-            title=GROUP_TITLES[group_name],
-            output_path=figures_dir / f"framework_main_{group_name}_2x2.png",
-            nrows=2,
-            ncols=2,
+    if args.case_unit_dir and args.case_unit_dir.exists():
+        contrast_delta_table = build_contrast_delta_table(
+            args.case_unit_dir,
+            n_bootstraps=args.contrast_n_bootstraps,
+            seed=args.contrast_seed,
         )
-        plot_metric_grid(
-            case_layerwise,
-            models=models,
-            metrics=SUPPLEMENT_METRICS,
-            title=f"{GROUP_TITLES[group_name]}: selected metric battery",
-            output_path=figures_dir / f"framework_supplement_{group_name}_4x2.png",
-            nrows=4,
-            ncols=2,
+        contrast_delta_table.to_csv(
+            tables_dir / "framework_prespecified_contrast_deltas.csv",
+            index=False,
         )
 
     baseline_table = build_baseline_table(
+        baseline_results=args.baseline_results,
+        baseline_bootstrap_dir=args.baseline_bootstrap_dir,
+        saliency_results=args.saliency_baseline_results,
+        saliency_bootstrap_dir=args.saliency_baseline_bootstrap_dir,
+    )
+    baseline_layerwise = load_baseline_layerwise(
         baseline_results=args.baseline_results,
         baseline_bootstrap_dir=args.baseline_bootstrap_dir,
         saliency_results=args.saliency_baseline_results,
@@ -163,6 +230,32 @@ def main() -> None:
         plot_baseline_context(
             baseline_context,
             output_path=figures_dir / "framework_main_baseline_context_2x2.png",
+        )
+
+    for group_name, models in MODEL_GROUPS.items():
+        plot_metric_grid(
+            case_layerwise,
+            models=models,
+            metrics=CENTRAL_METRICS,
+            title=GROUP_TITLES[group_name],
+            output_path=figures_dir / f"framework_main_{group_name}_2x2.png",
+            nrows=2,
+            ncols=2,
+            baseline_layerwise=baseline_layerwise,
+            baseline_summary=baseline_table,
+            include_baselines=True,
+        )
+        plot_metric_grid(
+            case_layerwise,
+            models=models,
+            metrics=SUPPLEMENT_METRICS,
+            title=f"{GROUP_TITLES[group_name]}: selected metric battery",
+            output_path=figures_dir / f"framework_supplement_{group_name}_4x2.png",
+            nrows=4,
+            ncols=2,
+            baseline_layerwise=baseline_layerwise,
+            baseline_summary=baseline_table,
+            include_baselines=True,
         )
 
     write_optional_summary(
@@ -398,8 +491,48 @@ def plot_metric_grid(
     output_path: Path,
     nrows: int,
     ncols: int,
+    baseline_layerwise: pd.DataFrame | None = None,
+    baseline_summary: pd.DataFrame | None = None,
+    include_baselines: bool = False,
 ) -> None:
-    fig, axes = plt.subplots(nrows, ncols, figsize=(7.2 * ncols, 4.2 * nrows))
+    with plt.rc_context(
+        {
+            "font.size": 11,
+            "axes.titlesize": 13,
+            "axes.labelsize": 12,
+            "xtick.labelsize": 10.5,
+            "ytick.labelsize": 10.5,
+            "legend.fontsize": 10.5,
+        }
+    ):
+        fig, axes = plt.subplots(nrows, ncols, figsize=(6.4 * ncols, 4.15 * nrows))
+        _plot_metric_grid_contents(
+            fig,
+            axes,
+            layerwise=layerwise,
+            models=models,
+            metrics=metrics,
+            title=title,
+            output_path=output_path,
+            baseline_layerwise=baseline_layerwise,
+            baseline_summary=baseline_summary,
+            include_baselines=include_baselines,
+        )
+
+
+def _plot_metric_grid_contents(
+    fig: plt.Figure,
+    axes: np.ndarray,
+    *,
+    layerwise: pd.DataFrame,
+    models: list[str],
+    metrics: list[str],
+    title: str,
+    output_path: Path,
+    baseline_layerwise: pd.DataFrame | None,
+    baseline_summary: pd.DataFrame | None,
+    include_baselines: bool,
+) -> None:
     axes_flat = np.ravel(axes)
     colors = plt.get_cmap("tab10").colors
     for panel_idx, (ax, experiment_id) in enumerate(zip(axes_flat, metrics)):
@@ -432,21 +565,145 @@ def plot_metric_grid(
                     alpha=0.16,
                     linewidth=0,
                 )
+        if include_baselines:
+            add_metric_references(
+                ax,
+                experiment_id=experiment_id,
+                baseline_layerwise=baseline_layerwise,
+                baseline_summary=baseline_summary,
+            )
         panel_label = chr(ord("a") + panel_idx)
-        ax.set_title(f"({panel_label}) {METRIC_LABELS.get(experiment_id, experiment_id)}")
+        ax.set_title(
+            f"({panel_label}) {METRIC_LABELS.get(experiment_id, experiment_id)}"
+        )
         ax.set_xlabel("Relative depth")
         ax.set_ylabel("Score")
         ax.grid(alpha=0.25, linewidth=0.5)
         ax.set_xlim(-0.02, 1.02)
     for ax in axes_flat[len(metrics):]:
         ax.axis("off")
-    handles, labels = axes_flat[0].get_legend_handles_labels()
+    handles, labels = collect_unique_legend_items(axes_flat)
     if handles:
-        fig.legend(handles, labels, loc="lower center", ncol=min(len(labels), 4), frameon=False)
-    fig.suptitle(title, y=0.995, fontsize=14)
-    fig.tight_layout(rect=(0, 0.04, 1, 0.98))
-    fig.savefig(output_path, dpi=300)
+        fig.legend(
+            handles,
+            labels,
+            loc="lower center",
+            ncol=min(len(labels), 5),
+            frameon=False,
+        )
+    fig.suptitle(title, y=0.995, fontsize=15)
+    fig.tight_layout(rect=(0, 0.045, 1, 0.98))
+    fig.savefig(output_path, dpi=300, bbox_inches="tight", pad_inches=0.05)
     plt.close(fig)
+
+
+def collect_unique_legend_items(
+    axes: np.ndarray,
+) -> tuple[list[Any], list[str]]:
+    handles_by_label: dict[str, Any] = {}
+    for ax in axes:
+        handles, labels = ax.get_legend_handles_labels()
+        for handle, label in zip(handles, labels):
+            if label.startswith("_"):
+                continue
+            handles_by_label.setdefault(label, handle)
+    return list(handles_by_label.values()), list(handles_by_label.keys())
+
+
+def add_metric_references(
+    ax: plt.Axes,
+    *,
+    experiment_id: str,
+    baseline_layerwise: pd.DataFrame | None,
+    baseline_summary: pd.DataFrame | None,
+) -> None:
+    if baseline_layerwise is not None and not baseline_layerwise.empty:
+        draw_random_vit_curve(ax, experiment_id, baseline_layerwise)
+        if experiment_id == "saliency-auc-judd":
+            draw_spatial_saliency_lines(ax, baseline_layerwise)
+    if baseline_summary is not None and not baseline_summary.empty:
+        draw_null_reference(ax, experiment_id, baseline_summary)
+    chance = chance_for_experiment(experiment_id)
+    if chance is not None:
+        ax.axhline(
+            chance,
+            color="#6f6f6f",
+            linestyle=(0, (1, 2)),
+            linewidth=1.4,
+            alpha=0.8,
+            label="Chance",
+        )
+
+
+def draw_random_vit_curve(
+    ax: plt.Axes,
+    experiment_id: str,
+    baseline_layerwise: pd.DataFrame,
+) -> None:
+    curve = baseline_layerwise[
+        (baseline_layerwise["experiment_id"] == experiment_id)
+        & (baseline_layerwise["model_name"] == "timm-random::vit_base_patch16_224")
+    ].sort_values("layer_index")
+    if curve.empty:
+        return
+    ax.plot(
+        curve["relative_depth"],
+        curve["raw_score"],
+        color="#111111",
+        marker="x",
+        linestyle=(0, (5, 2)),
+        linewidth=1.8,
+        markersize=4.8,
+        label="Random ViT",
+        zorder=4,
+    )
+
+
+def draw_spatial_saliency_lines(
+    ax: plt.Axes,
+    baseline_layerwise: pd.DataFrame,
+) -> None:
+    styles = {
+        "saliency-baseline::center-gaussian": ("Center Gaussian", "#8c2d04", "-."),
+        "saliency-baseline::uniform": ("Uniform map", "#6f6f6f", ":"),
+    }
+    for model_name, (label, color, linestyle) in styles.items():
+        curve = baseline_layerwise[
+            (baseline_layerwise["experiment_id"] == "saliency-auc-judd")
+            & (baseline_layerwise["model_name"] == model_name)
+        ]
+        if curve.empty:
+            continue
+        ax.axhline(
+            float(curve["raw_score"].iloc[0]),
+            color=color,
+            linestyle=linestyle,
+            linewidth=1.5,
+            alpha=0.85,
+            label=label,
+        )
+
+
+def draw_null_reference(
+    ax: plt.Axes,
+    experiment_id: str,
+    baseline_summary: pd.DataFrame,
+) -> None:
+    rows = baseline_summary[
+        (baseline_summary["experiment_id"] == experiment_id)
+        & baseline_summary["null_score"].notna()
+    ]
+    if rows.empty:
+        return
+    row = rows.iloc[0]
+    ax.axhline(
+        float(row["null_score"]),
+        color="#525252",
+        linestyle=(0, (3, 2)),
+        linewidth=1.4,
+        alpha=0.85,
+        label=null_label(str(row["metric_name"])),
+    )
 
 
 def build_baseline_table(
@@ -477,6 +734,28 @@ def build_baseline_table(
     table = table[table["metric_name"].isin(BASELINE_METRIC_NAMES)].copy()
     table["reference"] = table["metric_name"].map(reference_for_metric)
     return table.sort_values(["metric_label", "model_name"])
+
+
+def load_baseline_layerwise(
+    *,
+    baseline_results: Path | None,
+    baseline_bootstrap_dir: Path | None,
+    saliency_results: Path | None,
+    saliency_bootstrap_dir: Path | None,
+) -> pd.DataFrame:
+    frames: list[pd.DataFrame] = []
+    if baseline_results and baseline_results.exists():
+        random_layerwise = load_layerwise_results(baseline_results)
+        random_layer_bootstrap = load_layer_bootstrap(baseline_bootstrap_dir)
+        frames.append(attach_layer_ci(random_layerwise, random_layer_bootstrap))
+    if saliency_results and saliency_results.exists():
+        sal_layerwise = load_layerwise_results(saliency_results)
+        sal_layer_bootstrap = load_layer_bootstrap(saliency_bootstrap_dir)
+        frames.append(attach_layer_ci(sal_layerwise, sal_layer_bootstrap))
+    if not frames:
+        return pd.DataFrame()
+    layerwise = pd.concat(frames, ignore_index=True)
+    return layerwise[layerwise["metric_name"].isin(BASELINE_METRIC_NAMES)].copy()
 
 
 def build_baseline_context_table(
@@ -655,6 +934,383 @@ def write_optional_summary(
     best_bootstrap = load_best_bootstrap(bootstrap_dir)
     layerwise = attach_layer_ci(layerwise, layer_bootstrap)
     summarize_scores(layerwise, best_bootstrap).to_csv(output_path, index=False)
+
+
+def write_framework_run_summary(
+    *,
+    case_results: Path,
+    baseline_results: Path | None,
+    saliency_baseline_results: Path | None,
+    rollout_results: Path | None,
+    pooling_results: Path | None,
+    sidecar_archives_dir: Path,
+    output_path: Path,
+) -> None:
+    rows: list[dict[str, Any]] = []
+    result_specs = [
+        ("case_study", case_results),
+        ("random_vit_baselines", baseline_results),
+        ("saliency_spatial_baselines", saliency_baseline_results),
+        ("rollout_sensitivity", rollout_results),
+        ("pooling_ablation", pooling_results),
+    ]
+    for label, path in result_specs:
+        if path is None or not path.exists():
+            continue
+        frame = pd.read_csv(path)
+        done = frame[frame["status"] == "done"].copy()
+        duration = pd.to_numeric(done.get("duration_seconds"), errors="coerce")
+        rows.append(
+            {
+                "artifact_component": label,
+                "result_csv": str(path),
+                "result_rows": int(len(frame)),
+                "done_rows": int(len(done)),
+                "unique_models": int(done["model_name"].nunique()) if not done.empty else 0,
+                "unique_experiments": (
+                    int(done["experiment_id"].nunique()) if not done.empty else 0
+                ),
+                "unique_metric_implementations": (
+                    int(done["metric_name"].nunique()) if not done.empty else 0
+                ),
+                "duration_seconds_median": _nan_percentile(duration, 50),
+                "duration_seconds_iqr_low": _nan_percentile(duration, 25),
+                "duration_seconds_iqr_high": _nan_percentile(duration, 75),
+                "duration_seconds_total": float(duration.sum(skipna=True)),
+            }
+        )
+    if sidecar_archives_dir.exists():
+        archives = sorted(sidecar_archives_dir.glob("*.tar.gz"))
+        rows.append(
+            {
+                "artifact_component": "unit_sidecar_archives",
+                "result_csv": str(sidecar_archives_dir),
+                "result_rows": int(len(archives)),
+                "done_rows": int(len(archives)),
+                "unique_models": "",
+                "unique_experiments": "",
+                "unique_metric_implementations": "",
+                "duration_seconds_median": "",
+                "duration_seconds_iqr_low": "",
+                "duration_seconds_iqr_high": "",
+                "duration_seconds_total": "",
+            }
+        )
+    pd.DataFrame(rows).to_csv(output_path, index=False)
+
+
+def write_artifact_verification_table(*, output_path: Path) -> None:
+    package_summary = _review_package_summary()
+    rows = [
+        {
+            "artifact_item": "Anonymized review package",
+            "location": "Online Resource 1",
+            "verification": package_summary
+            or "Packaged with MANIFEST.md; SHA256 generated at packaging time",
+        },
+        {
+            "artifact_item": "Smoke command",
+            "location": "review_artifact/smoke_json_runner.py",
+            "verification": "First pass runs two metrics; resume pass runs zero metrics",
+        },
+        {
+            "artifact_item": "Expected smoke output",
+            "location": "review_artifact/expected_results.csv",
+            "verification": "Stable results.csv columns compared after volatile timing columns are removed",
+        },
+        {
+            "artifact_item": "Unit sidecar archives",
+            "location": "review_artifact/unit_result_archives/",
+            "verification": "Compressed sidecars for case study, baselines and sensitivity checks",
+        },
+        {
+            "artifact_item": "Bootstrap/null summaries",
+            "location": "outputs/bootstrap-framework-*/",
+            "verification": "Generated with 2000 resamples and seed 20260611",
+        },
+        {
+            "artifact_item": "Figure/table regeneration",
+            "location": "scripts/framework_paper_outputs.py",
+            "verification": "Regenerates main figures, supplementary grids, baseline context and contrast deltas",
+        },
+    ]
+    pd.DataFrame(rows).to_csv(output_path, index=False)
+
+
+def _review_package_summary() -> str:
+    path = Path("outputs/review_artifact/review_artifact_package.csv")
+    if not path.exists():
+        return ""
+    frame = pd.read_csv(path)
+    if frame.empty:
+        return ""
+    row = frame.iloc[0]
+    return (
+        f"{row['archive']}; SHA256={row['sha256']}; "
+        f"{int(row['file_count'])} files; {int(row['size_bytes'])} bytes"
+    )
+
+
+def build_contrast_delta_table(
+    sidecar_dir: Path,
+    *,
+    n_bootstraps: int = 2000,
+    seed: int = 20260611,
+) -> pd.DataFrame:
+    """Return pre-specified paired bootstrap deltas for central paper contrasts."""
+    sidecar_index = _index_sidecars(sidecar_dir)
+    rows: list[dict[str, Any]] = []
+    for contrast in CONTRASTS:
+        for experiment_id in CENTRAL_METRICS:
+            reference_path = sidecar_index.get((contrast["reference"], experiment_id))
+            comparison_path = sidecar_index.get((contrast["comparison"], experiment_id))
+            if reference_path is None or comparison_path is None:
+                rows.append(_missing_delta_row(contrast, experiment_id, seed, n_bootstraps))
+                continue
+            reference = pd.read_csv(reference_path)
+            comparison = pd.read_csv(comparison_path)
+            rows.append(
+                summarize_contrast_delta(
+                    reference,
+                    comparison,
+                    factor=contrast["factor"],
+                    contrast=contrast["contrast"],
+                    experiment_id=experiment_id,
+                    reference_model=contrast["reference"],
+                    comparison_model=contrast["comparison"],
+                    n_bootstraps=n_bootstraps,
+                    seed=seed,
+                )
+            )
+    return pd.DataFrame(rows, columns=DELTA_TABLE_COLUMNS)
+
+
+def summarize_contrast_delta(
+    reference: pd.DataFrame,
+    comparison: pd.DataFrame,
+    *,
+    factor: str,
+    contrast: str,
+    experiment_id: str,
+    reference_model: str,
+    comparison_model: str,
+    n_bootstraps: int,
+    seed: int,
+) -> dict[str, Any]:
+    reference_data, comparison_data = _aligned_metric_data(reference, comparison)
+    rng = _contrast_rng(seed, factor, contrast, experiment_id)
+    final_deltas = np.empty(n_bootstraps, dtype=float)
+    best_deltas = np.empty(n_bootstraps, dtype=float)
+    n_units = len(reference_data["unit_index"])
+    for bootstrap_idx in range(n_bootstraps):
+        sample = rng.integers(0, n_units, size=n_units)
+        final_deltas[bootstrap_idx] = (
+            _aggregate_layer(comparison_data, comparison_data["final_pos"], sample)
+            - _aggregate_layer(reference_data, reference_data["final_pos"], sample)
+        )
+        best_deltas[bootstrap_idx] = _best_layer_score(
+            comparison_data,
+            sample,
+        ) - _best_layer_score(reference_data, sample)
+
+    all_units = np.arange(n_units)
+    final_delta = (
+        _aggregate_layer(comparison_data, comparison_data["final_pos"], all_units)
+        - _aggregate_layer(reference_data, reference_data["final_pos"], all_units)
+    )
+    best_delta = _best_layer_score(comparison_data, all_units) - _best_layer_score(
+        reference_data,
+        all_units,
+    )
+    final_ci = _nan_ci(final_deltas)
+    best_ci = _nan_ci(best_deltas)
+    return {
+        "factor": factor,
+        "contrast": contrast,
+        "metric_label": METRIC_LABELS.get(experiment_id, experiment_id),
+        "reference_model": MODEL_LABELS.get(reference_model, reference_model),
+        "comparison_model": MODEL_LABELS.get(comparison_model, comparison_model),
+        "final_delta": final_delta,
+        "final_ci_lower": final_ci[0],
+        "final_ci_upper": final_ci[1],
+        "final_support": _support_label(*final_ci),
+        "best_delta": best_delta,
+        "best_ci_lower": best_ci[0],
+        "best_ci_upper": best_ci[1],
+        "best_support": _support_label(*best_ci),
+        "n_units": n_units,
+        "reference_n_layers": len(reference_data["layer_index"]),
+        "comparison_n_layers": len(comparison_data["layer_index"]),
+        "seed": seed,
+        "n_bootstraps": n_bootstraps,
+    }
+
+
+def _index_sidecars(sidecar_dir: Path) -> dict[tuple[str, str], Path]:
+    index: dict[tuple[str, str], Path] = {}
+    for path in sorted(sidecar_dir.glob("*.csv")):
+        header = pd.read_csv(path, nrows=1)
+        if header.empty:
+            continue
+        row = header.iloc[0]
+        index[(str(row["model_name"]), normalize_experiment_id(str(row["experiment_id"])))] = path
+    return index
+
+
+def _missing_delta_row(
+    contrast: dict[str, str],
+    experiment_id: str,
+    seed: int,
+    n_bootstraps: int,
+) -> dict[str, Any]:
+    return {
+        "factor": contrast["factor"],
+        "contrast": contrast["contrast"],
+        "metric_label": METRIC_LABELS.get(experiment_id, experiment_id),
+        "reference_model": MODEL_LABELS.get(contrast["reference"], contrast["reference"]),
+        "comparison_model": MODEL_LABELS.get(contrast["comparison"], contrast["comparison"]),
+        "final_delta": np.nan,
+        "final_ci_lower": np.nan,
+        "final_ci_upper": np.nan,
+        "final_support": "missing",
+        "best_delta": np.nan,
+        "best_ci_lower": np.nan,
+        "best_ci_upper": np.nan,
+        "best_support": "missing",
+        "n_units": np.nan,
+        "reference_n_layers": np.nan,
+        "comparison_n_layers": np.nan,
+        "seed": seed,
+        "n_bootstraps": n_bootstraps,
+    }
+
+
+def _aligned_metric_data(
+    reference: pd.DataFrame,
+    comparison: pd.DataFrame,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    common_units = sorted(set(reference["unit_index"]) & set(comparison["unit_index"]))
+    if not common_units:
+        raise ValueError("Contrast sidecars do not share unit_index values")
+    return (
+        _metric_data(reference, common_units),
+        _metric_data(comparison, common_units),
+    )
+
+
+def _metric_data(frame: pd.DataFrame, unit_index: list[Any]) -> dict[str, Any]:
+    metric_name = str(frame["metric_name"].iloc[0])
+    mode = _contrast_metric_mode(metric_name)
+    layers = sorted(frame["layer_index"].unique(), key=float)
+    values: list[np.ndarray] = []
+    human_values: list[np.ndarray] = []
+    for layer in layers:
+        layer_frame = frame[frame["layer_index"] == layer].set_index("unit_index")
+        if mode in {"mean", "accuracy"}:
+            column = "is_correct" if mode == "accuracy" else "unit_value"
+            values.append(pd.to_numeric(layer_frame.loc[unit_index, column]).to_numpy(float))
+            human_values.append(np.array([], dtype=float))
+        else:
+            values.append(pd.to_numeric(layer_frame.loc[unit_index, "unit_value"]).to_numpy(float))
+            human_values.append(
+                pd.to_numeric(layer_frame.loc[unit_index, "human_value"]).to_numpy(float)
+            )
+    values_array = np.vstack(values)
+    human_array = np.vstack(human_values) if mode == "tid_spearman" else None
+    rank_values = np.vstack([rankdata(row, method="average") for row in values_array])
+    rank_human = (
+        np.vstack([rankdata(row, method="average") for row in human_array])
+        if human_array is not None
+        else None
+    )
+    return {
+        "metric_name": metric_name,
+        "mode": mode,
+        "unit_index": unit_index,
+        "layer_index": layers,
+        "values": values_array,
+        "rank_values": rank_values,
+        "rank_human": rank_human,
+        "final_pos": len(layers) - 1,
+    }
+
+
+def _contrast_metric_mode(metric_name: str) -> str:
+    if metric_name in ACCURACY_METRIC_NAMES:
+        return "accuracy"
+    if metric_name == "tid_spearman_mos":
+        return "tid_spearman"
+    if metric_name.startswith("saliency_"):
+        return "mean"
+    raise ValueError(f"Unsupported contrast metric: {metric_name}")
+
+
+def _aggregate_layer(data: dict[str, Any], layer_pos: int, sample: np.ndarray) -> float:
+    if data["mode"] == "tid_spearman":
+        return _fast_spearman(
+            data["rank_values"][layer_pos, sample],
+            data["rank_human"][layer_pos, sample],
+        )
+    return float(np.nanmean(data["values"][layer_pos, sample]))
+
+
+def _best_layer_score(data: dict[str, Any], sample: np.ndarray) -> float:
+    scores = np.array(
+        [
+            _aggregate_layer(data, layer_pos, sample)
+            for layer_pos in range(len(data["layer_index"]))
+        ],
+        dtype=float,
+    )
+    if np.isfinite(scores).any():
+        return float(np.nanmax(scores))
+    return float("nan")
+
+
+def _fast_spearman(rank_x: np.ndarray, rank_y: np.ndarray) -> float:
+    finite = np.isfinite(rank_x) & np.isfinite(rank_y)
+    if finite.sum() < 2:
+        return float("nan")
+    x = rank_x[finite]
+    y = rank_y[finite]
+    x = x - x.mean()
+    y = y - y.mean()
+    denom = np.sqrt(np.sum(x * x) * np.sum(y * y))
+    if denom == 0:
+        return float("nan")
+    return float(np.sum(x * y) / denom)
+
+
+def _contrast_rng(seed: int, *parts: str) -> np.random.Generator:
+    digest = hashlib.sha256("::".join([str(seed), *parts]).encode("utf-8")).hexdigest()
+    return np.random.default_rng(int(digest[:16], 16) % (2**32))
+
+
+def _nan_ci(values: np.ndarray) -> tuple[float, float]:
+    finite = values[np.isfinite(values)]
+    if len(finite) == 0:
+        return float("nan"), float("nan")
+    return (
+        float(np.percentile(finite, 2.5)),
+        float(np.percentile(finite, 97.5)),
+    )
+
+
+def _support_label(ci_lower: float, ci_upper: float) -> str:
+    if not np.isfinite(ci_lower) or not np.isfinite(ci_upper):
+        return "missing"
+    if ci_lower > 0:
+        return "directional+"
+    if ci_upper < 0:
+        return "directional-"
+    return "ambiguous"
+
+
+def _nan_percentile(values: pd.Series, percentile: float) -> float:
+    finite = pd.to_numeric(values, errors="coerce").dropna()
+    if finite.empty:
+        return float("nan")
+    return float(np.percentile(finite, percentile))
 
 
 def attach_null_summary(summary: pd.DataFrame, null_best: pd.DataFrame) -> pd.DataFrame:
