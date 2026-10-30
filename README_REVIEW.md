@@ -91,53 +91,67 @@ metric, status, result, error, and config hash.
 - Metric numerical validity on real human-alignment benchmarks.
 
 Full benchmark experiments require the original datasets/checkpoints and should
-be run on the dedicated experiment server, not through this smoke artifact.
+be run in an environment where those licensed resources are available, not
+through this smoke artifact.
 
-## Running Full Experiments on the Dedicated Server
-
-Full experiments are intended to run on the dedicated shared server. The
-agreed sync and execution commands are:
-
-```bash
-rsync -av --exclude=".venv" --exclude="ejemplos_pablo" ./ megatron.uv.es:~/vit-human-alignment-framework/
-
-ssh deep.uv.es "cd ~/vit-human-alignment-framework/ && /media/disk/users/jmjaen/.local/bin/uv run main.py"
-```
+## Running Full Experiments With Available Datasets
 
 By default, `main.py` runs the JSON model-battery configuration currently wired
-in the repository and persists to `results-model-battery.csv`. The same entry
-point can run another JSON configuration through environment variables. For the
-framework random-ViT baseline configuration:
+in the repository and persists to `results-model-battery.csv`:
 
 ```bash
-ssh deep.uv.es "cd ~/vit-human-alignment-framework/ && VIT_ALIGNMENT_JSON_PATH=data/experiments.framework-baselines.json VIT_ALIGNMENT_RESULTS_PATH=results-framework-baselines.csv /media/disk/users/jmjaen/.local/bin/uv run main.py"
+uv run main.py
+```
+
+The same entry point can run another JSON configuration through environment
+variables. For the framework random-ViT baseline configuration:
+
+```bash
+VIT_ALIGNMENT_JSON_PATH=data/experiments.framework-baselines.json \
+VIT_ALIGNMENT_RESULTS_PATH=results-framework-baselines.csv \
+uv run main.py
 ```
 
 To also persist per-unit sidecars for confidence intervals and null controls:
 
 ```bash
-ssh deep.uv.es "cd ~/vit-human-alignment-framework/ && VIT_ALIGNMENT_JSON_PATH=data/experiments.framework-baselines.json VIT_ALIGNMENT_RESULTS_PATH=results-framework-baselines-seed0-v3.csv VIT_ALIGNMENT_UNIT_RESULTS_DIR=unit-results-framework-baselines-seed0-v3 /media/disk/users/jmjaen/.local/bin/uv run main.py"
+VIT_ALIGNMENT_JSON_PATH=data/experiments.framework-baselines.json \
+VIT_ALIGNMENT_RESULTS_PATH=results-framework-baselines-seed0-v3.csv \
+VIT_ALIGNMENT_UNIT_RESULTS_DIR=unit-results-framework-baselines-seed0-v3 \
+uv run main.py
 ```
 
 Center and uniform saliency controls are saliency-only adapters and therefore
 use a separate configuration:
 
 ```bash
-ssh deep.uv.es "cd ~/vit-human-alignment-framework/ && VIT_ALIGNMENT_JSON_PATH=data/experiments.framework-saliency-baselines.json VIT_ALIGNMENT_RESULTS_PATH=results-framework-saliency-baselines.csv VIT_ALIGNMENT_UNIT_RESULTS_DIR=unit-results-framework-saliency-baselines /media/disk/users/jmjaen/.local/bin/uv run main.py"
+VIT_ALIGNMENT_JSON_PATH=data/experiments.framework-saliency-baselines.json \
+VIT_ALIGNMENT_RESULTS_PATH=results-framework-saliency-baselines.csv \
+VIT_ALIGNMENT_UNIT_RESULTS_DIR=unit-results-framework-saliency-baselines \
+uv run main.py
 ```
 
 The compact case-study configuration used for the framework-paper figures is:
 
 ```bash
-ssh deep.uv.es "cd ~/vit-human-alignment-framework/ && VIT_ALIGNMENT_JSON_PATH=data/experiments.framework-case-study.json VIT_ALIGNMENT_RESULTS_PATH=results-framework-case-study-v2.csv VIT_ALIGNMENT_UNIT_RESULTS_DIR=unit-results-framework-case-study-v2 /media/disk/users/jmjaen/.local/bin/uv run main.py"
+VIT_ALIGNMENT_JSON_PATH=data/experiments.framework-case-study.json \
+VIT_ALIGNMENT_RESULTS_PATH=results-framework-case-study-v2.csv \
+VIT_ALIGNMENT_UNIT_RESULTS_DIR=unit-results-framework-case-study-v2 \
+uv run main.py
 ```
 
 Two small supplementary sensitivity runs are also defined:
 
 ```bash
-ssh deep.uv.es "cd ~/vit-human-alignment-framework/ && VIT_ALIGNMENT_JSON_PATH=data/experiments.framework-rollout-sensitivity.json VIT_ALIGNMENT_RESULTS_PATH=results-framework-rollout-sensitivity.csv VIT_ALIGNMENT_UNIT_RESULTS_DIR=unit-results-framework-rollout-sensitivity /media/disk/users/jmjaen/.local/bin/uv run main.py"
+VIT_ALIGNMENT_JSON_PATH=data/experiments.framework-rollout-sensitivity.json \
+VIT_ALIGNMENT_RESULTS_PATH=results-framework-rollout-sensitivity.csv \
+VIT_ALIGNMENT_UNIT_RESULTS_DIR=unit-results-framework-rollout-sensitivity \
+uv run main.py
 
-ssh deep.uv.es "cd ~/vit-human-alignment-framework/ && VIT_ALIGNMENT_JSON_PATH=data/experiments.framework-pooling-ablation.json VIT_ALIGNMENT_RESULTS_PATH=results-framework-pooling-ablation.csv VIT_ALIGNMENT_UNIT_RESULTS_DIR=unit-results-framework-pooling-ablation /media/disk/users/jmjaen/.local/bin/uv run main.py"
+VIT_ALIGNMENT_JSON_PATH=data/experiments.framework-pooling-ablation.json \
+VIT_ALIGNMENT_RESULTS_PATH=results-framework-pooling-ablation.csv \
+VIT_ALIGNMENT_UNIT_RESULTS_DIR=unit-results-framework-pooling-ablation \
+uv run main.py
 ```
 
 The review artifact stores large unit-level sidecar directories as compressed
@@ -154,7 +168,8 @@ uv run python scripts/bootstrap_unit_results.py unit-results-framework-baselines
 uv run python scripts/bootstrap_unit_results.py unit-results-framework-case-study-v2/*.csv --output-dir outputs/bootstrap-framework-case-study --include-null
 uv run python scripts/bootstrap_unit_results.py unit-results-framework-rollout-sensitivity/*.csv --output-dir outputs/bootstrap-framework-rollout-sensitivity --include-null
 uv run python scripts/bootstrap_unit_results.py unit-results-framework-pooling-ablation/*.csv --output-dir outputs/bootstrap-framework-pooling-ablation --include-null
-uv run python scripts/framework_paper_outputs.py --case-results results-framework-case-study-v2.csv --case-bootstrap-dir outputs/bootstrap-framework-case-study --baseline-results results-framework-baselines-seed0-v3.csv --baseline-bootstrap-dir outputs/bootstrap-framework-baselines --saliency-baseline-results results-framework-saliency-baselines.csv --saliency-baseline-bootstrap-dir outputs/bootstrap-framework-saliency-baselines --rollout-results results-framework-rollout-sensitivity.csv --rollout-bootstrap-dir outputs/bootstrap-framework-rollout-sensitivity --pooling-results results-framework-pooling-ablation.csv --pooling-bootstrap-dir outputs/bootstrap-framework-pooling-ablation --output-dir outputs/framework_paper
+uv run python scripts/framework_paper_outputs.py --case-results results-framework-case-study-v2.csv --case-bootstrap-dir outputs/bootstrap-framework-case-study --baseline-results results-framework-baselines-seed0-v3.csv --baseline-bootstrap-dir outputs/bootstrap-framework-baselines --saliency-baseline-results results-framework-saliency-baselines.csv --saliency-baseline-bootstrap-dir outputs/bootstrap-framework-saliency-baselines --rollout-results results-framework-rollout-sensitivity.csv --rollout-bootstrap-dir outputs/bootstrap-framework-rollout-sensitivity --pooling-results results-framework-pooling-ablation.csv --pooling-bootstrap-dir outputs/bootstrap-framework-pooling-ablation --case-unit-dir unit-results-framework-case-study-v2 --output-dir outputs/framework_paper
+uv run python scripts/package_review_artifact.py
 ```
 
 The older saliency-only baseline configuration remains available as
@@ -172,14 +187,6 @@ for the first seeded random-ViT run, which stopped before all LEVELS splits were
 complete. Claims in the paper should use the closed sidecar-enabled `v3` output
 instead.
 
-Confirm the dataset paths and checkpoint availability on the server before
-launching any full experiment.
-
-The server is shared. Before launching long runs, check that the intended
-configuration, output path and resumability state are correct, and inspect only
-your own related processes if a previous execution may still be running. Avoid
-`rsync --delete`, broad cleanup commands, killing processes, or deleting caches,
-checkpoints or result directories unless the target is known to be yours and the
-action has been explicitly approved. If permissions, disk space, stuck jobs or
-ambiguous paths become blockers, stop and ask before attempting a destructive or
-invasive fix.
+Confirm dataset paths, checkpoint availability, output paths and resumability
+state before launching any full experiment. The review package omits
+institution-specific execution hosts to preserve double-blind review.

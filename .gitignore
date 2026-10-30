@@ -4,3 +4,7 @@ __pycache__/
 .pytest_cache/
 .venv/
 unit-results-framework-*/
+
+# Local scratch and generated review package
+tmp/
+outputs/review_artifact/
