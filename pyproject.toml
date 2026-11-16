@@ -1,7 +1,7 @@
 [project]
 name = "vit-human-alignment-framework"
 version = "0.1.0"
-description = "Add your description here"
+description = "Layer-wise, baseline-aware perceptual alignment analysis of Vision Transformers"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
@@ -18,11 +18,14 @@ dependencies = [
     "wget>=3.2",
 ]
 
-[project.optional-dependencies]
+[dependency-groups]
+# `uv sync` instala este grupo por defecto, así `uv run pytest` funciona tras el sync.
 dev = [
     "pytest>=8.0",
     "pytest-cov>=4.0",
 ]
+
+[project.optional-dependencies]
 # `jax[cuda12]` solo tiene wheels para Linux x86_64. Activarlo en el server con
 # `uv sync --extra cuda`. macOS sigue cayendo a la wheel CPU sin pelearse.
 cuda = [
