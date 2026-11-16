@@ -3,6 +3,8 @@ name = "vit-human-alignment-framework"
 version = "0.1.0"
 description = "Layer-wise, baseline-aware perceptual alignment analysis of Vision Transformers"
 readme = "README.md"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
 requires-python = ">=3.13"
 dependencies = [
     "flax>=0.10.4",

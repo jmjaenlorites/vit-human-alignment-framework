@@ -128,5 +128,14 @@ uv run python review_artifact/smoke_json_runner.py      # end-to-end smoke test
 uv run pytest tests/integration                         # slower; some tests need local data
 ```
 
+## License
+
+Apache License 2.0 (see `LICENSE`). The visturing metrics in `src/metrics/visturing/`
+and `src/dataset_loaders/visturing/` are adapted from the
+[visturing](https://doi.org/10.3389/frai.2025.1665874) reference implementation, also
+released under the Apache License 2.0.
+
+## Reviewer artifact
+
 See `README_REVIEW.md` for the reviewer smoke artifact and the commands used to
 reproduce the paper figures and tables.
