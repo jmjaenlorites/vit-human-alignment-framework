@@ -151,6 +151,27 @@ DELTA_TABLE_COLUMNS = [
 LINE_STYLES = ["-", "--", "-.", ":"]
 MARKERS = ["o", "s", "^", "D", "P", "X"]
 
+# Main-text grids are drawn at their printed size (journal text width) so that
+# font sizes in points are the ones the reader sees; no title is embedded because
+# the LaTeX caption names the figure.
+MAIN_FIGURE_SIZE_IN = (5.15, 2.7)
+MAIN_FIGURE_RC = {
+    "font.size": 7,
+    "axes.titlesize": 7.5,
+    "axes.labelsize": 7,
+    "xtick.labelsize": 6.5,
+    "ytick.labelsize": 6.5,
+    "legend.fontsize": 6.5,
+    "axes.linewidth": 0.6,
+    "xtick.major.width": 0.6,
+    "ytick.major.width": 0.6,
+    "xtick.major.size": 2.5,
+    "ytick.major.size": 2.5,
+}
+# A null reference further below the plotted curves than their own range is listed
+# in the legend with its value instead of drawn, so it does not flatten the panel.
+NULL_OFF_SCALE_GAP = 1.0
+
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
@@ -237,13 +258,14 @@ def main() -> None:
             case_layerwise,
             models=models,
             metrics=CENTRAL_METRICS,
-            title=GROUP_TITLES[group_name],
+            title=None,
             output_path=figures_dir / f"framework_main_{group_name}_2x2.png",
             nrows=2,
             ncols=2,
             baseline_layerwise=baseline_layerwise,
             baseline_summary=baseline_table,
             include_baselines=True,
+            compact=True,
         )
         plot_metric_grid(
             case_layerwise,
@@ -487,16 +509,21 @@ def plot_metric_grid(
     *,
     models: list[str],
     metrics: list[str],
-    title: str,
+    title: str | None,
     output_path: Path,
     nrows: int,
     ncols: int,
     baseline_layerwise: pd.DataFrame | None = None,
     baseline_summary: pd.DataFrame | None = None,
     include_baselines: bool = False,
+    compact: bool = False,
 ) -> None:
-    with plt.rc_context(
-        {
+    """Plot a metric grid; ``compact`` draws it at main-text print size."""
+    if compact:
+        rc = MAIN_FIGURE_RC
+        figsize = MAIN_FIGURE_SIZE_IN
+    else:
+        rc = {
             "font.size": 11,
             "axes.titlesize": 13,
             "axes.labelsize": 12,
@@ -504,8 +531,9 @@ def plot_metric_grid(
             "ytick.labelsize": 10.5,
             "legend.fontsize": 10.5,
         }
-    ):
-        fig, axes = plt.subplots(nrows, ncols, figsize=(6.4 * ncols, 4.15 * nrows))
+        figsize = (6.4 * ncols, 4.15 * nrows)
+    with plt.rc_context(rc):
+        fig, axes = plt.subplots(nrows, ncols, figsize=figsize, sharex=compact)
         _plot_metric_grid_contents(
             fig,
             axes,
@@ -517,6 +545,7 @@ def plot_metric_grid(
             baseline_layerwise=baseline_layerwise,
             baseline_summary=baseline_summary,
             include_baselines=include_baselines,
+            compact=compact,
         )
 
 
@@ -527,14 +556,17 @@ def _plot_metric_grid_contents(
     layerwise: pd.DataFrame,
     models: list[str],
     metrics: list[str],
-    title: str,
+    title: str | None,
     output_path: Path,
     baseline_layerwise: pd.DataFrame | None,
     baseline_summary: pd.DataFrame | None,
     include_baselines: bool,
+    compact: bool = False,
 ) -> None:
     axes_flat = np.ravel(axes)
+    ncols = axes.shape[1] if np.ndim(axes) == 2 else len(axes_flat)
     colors = plt.get_cmap("tab10").colors
+    linewidth, markersize = (1.1, 2.6) if compact else (1.7, 4.2)
     for panel_idx, (ax, experiment_id) in enumerate(zip(axes_flat, metrics)):
         subset = layerwise[
             (layerwise["experiment_id"] == experiment_id)
@@ -545,15 +577,15 @@ def _plot_metric_grid_contents(
             if curve.empty:
                 continue
             color = colors[model_idx % len(colors)]
-            label = MODEL_LABELS.get(model_name, model_name)
+            label = MODEL_LABELS.get(model_name, model_name).replace("->", "\u2192")
             ax.plot(
                 curve["relative_depth"],
                 curve["raw_score"],
                 color=color,
                 marker=MARKERS[model_idx % len(MARKERS)],
                 linestyle=LINE_STYLES[model_idx % len(LINE_STYLES)],
-                linewidth=1.7,
-                markersize=4.2,
+                linewidth=linewidth,
+                markersize=markersize,
                 label=label,
             )
             if curve["ci_lower"].notna().any() and curve["ci_upper"].notna().any():
@@ -571,29 +603,45 @@ def _plot_metric_grid_contents(
                 experiment_id=experiment_id,
                 baseline_layerwise=baseline_layerwise,
                 baseline_summary=baseline_summary,
+                compact=compact,
             )
         panel_label = chr(ord("a") + panel_idx)
         ax.set_title(
-            f"({panel_label}) {METRIC_LABELS.get(experiment_id, experiment_id)}"
+            f"({panel_label}) {METRIC_LABELS.get(experiment_id, experiment_id)}",
+            pad=3 if compact else 6,
         )
-        ax.set_xlabel("Relative depth")
-        ax.set_ylabel("Score")
-        ax.grid(alpha=0.25, linewidth=0.5)
+        # In compact grids the axes are shared, so only the outer panels are labelled.
+        is_bottom_row = panel_idx >= len(metrics) - ncols
+        if not compact or is_bottom_row:
+            ax.set_xlabel("Relative depth")
+        if not compact or panel_idx % ncols == 0:
+            ax.set_ylabel("Score")
+        ax.grid(alpha=0.25, linewidth=0.4 if compact else 0.5)
+        if compact:
+            ax.yaxis.set_major_locator(plt.MaxNLocator(nbins=4))
         ax.set_xlim(-0.02, 1.02)
     for ax in axes_flat[len(metrics):]:
         ax.axis("off")
     handles, labels = collect_unique_legend_items(axes_flat)
+    legend_ncol = min(len(labels), 4 if compact else 5)
     if handles:
         fig.legend(
             handles,
             labels,
             loc="lower center",
-            ncol=min(len(labels), 5),
+            ncol=legend_ncol,
             frameon=False,
+            columnspacing=0.9 if compact else 2.0,
+            handlelength=2.4 if compact else 2.0,
         )
-    fig.suptitle(title, y=0.995, fontsize=15)
-    fig.tight_layout(rect=(0, 0.045, 1, 0.98))
-    fig.savefig(output_path, dpi=300, bbox_inches="tight", pad_inches=0.05)
+    if title:
+        fig.suptitle(title, y=0.995, fontsize=15)
+    if compact:
+        legend_rows = math.ceil(len(labels) / legend_ncol) if handles else 0
+        fig.tight_layout(rect=(0, 0.035 + 0.045 * legend_rows, 1, 1), h_pad=0.6, w_pad=1.0)
+    else:
+        fig.tight_layout(rect=(0, 0.045, 1, 0.98 if title else 1))
+    fig.savefig(output_path, dpi=300, bbox_inches="tight", pad_inches=0.02)
     plt.close(fig)
 
 
@@ -616,9 +664,10 @@ def add_metric_references(
     experiment_id: str,
     baseline_layerwise: pd.DataFrame | None,
     baseline_summary: pd.DataFrame | None,
+    compact: bool = False,
 ) -> None:
     if baseline_layerwise is not None and not baseline_layerwise.empty:
-        draw_random_vit_curve(ax, experiment_id, baseline_layerwise)
+        draw_random_vit_curve(ax, experiment_id, baseline_layerwise, compact=compact)
         if experiment_id == "saliency-auc-judd":
             draw_spatial_saliency_lines(ax, baseline_layerwise)
     if baseline_summary is not None and not baseline_summary.empty:
@@ -639,6 +688,8 @@ def draw_random_vit_curve(
     ax: plt.Axes,
     experiment_id: str,
     baseline_layerwise: pd.DataFrame,
+    *,
+    compact: bool = False,
 ) -> None:
     curve = baseline_layerwise[
         (baseline_layerwise["experiment_id"] == experiment_id)
@@ -652,8 +703,8 @@ def draw_random_vit_curve(
         color="#111111",
         marker="x",
         linestyle=(0, (5, 2)),
-        linewidth=1.8,
-        markersize=4.8,
+        linewidth=1.2 if compact else 1.8,
+        markersize=3.0 if compact else 4.8,
         label="Random ViT",
         zorder=4,
     )
@@ -665,7 +716,7 @@ def draw_spatial_saliency_lines(
 ) -> None:
     styles = {
         "saliency-baseline::center-gaussian": ("Center Gaussian", "#8c2d04", "-."),
-        "saliency-baseline::uniform": ("Uniform map", "#6f6f6f", ":"),
+        "saliency-baseline::uniform": ("Uniform map", "#7b5aa6", ":"),
     }
     for model_name, (label, color, linestyle) in styles.items():
         curve = baseline_layerwise[
@@ -696,13 +747,20 @@ def draw_null_reference(
     if rows.empty:
         return
     row = rows.iloc[0]
+    null_score = float(row["null_score"])
+    label = null_label(str(row["metric_name"]))
+    data_low, data_high = ax.dataLim.y0, ax.dataLim.y1
+    if null_score < data_low - NULL_OFF_SCALE_GAP * (data_high - data_low):
+        # Invisible handle: the legend entry carries the value of the off-scale null.
+        ax.plot([], [], linestyle="none", label=f"{label.replace('permutation', 'perm.')} {null_score:.3f} (off-scale)")
+        return
     ax.axhline(
-        float(row["null_score"]),
+        null_score,
         color="#525252",
         linestyle=(0, (3, 2)),
         linewidth=1.4,
         alpha=0.85,
-        label=null_label(str(row["metric_name"])),
+        label=label,
     )
 
 
