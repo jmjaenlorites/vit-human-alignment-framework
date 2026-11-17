@@ -96,7 +96,8 @@ def summarize_reference(reference: dict[str, Any]) -> None:
 def check_source_files(reference: dict[str, Any], *, strict: bool) -> int:
     failures = 0
     for source in reference["provenance"]["legacy_source_files"]:
-        path = Path(source["path"])
+        # Provenance paths are stored relative to the repository root.
+        path = (REPO_ROOT / source["path"]).resolve()
         if not path.exists():
             failures += 1
             print(f"MISSING {path}")

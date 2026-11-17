@@ -13,7 +13,7 @@ import pandas as pd
 
 
 INCLUDE_PATHS = [
-    "AGENTS.md",
+    "LICENSE",
     "README.md",
     "README_REVIEW.md",
     "pyproject.toml",
@@ -38,6 +38,7 @@ INCLUDE_PATHS = [
     "scripts/recompute_saliency_baselines.py",
     "scripts/bootstrap_unit_results.py",
     "scripts/framework_paper_outputs.py",
+    "scripts/framework_paper_appendix_tables.py",
     "scripts/package_review_artifact.py",
     "results-model-battery.csv",
     "results-saliency-baselines.csv",

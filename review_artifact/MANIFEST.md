@@ -3,7 +3,7 @@
 The anonymized review package should include the following files and folders:
 
 ```text
-AGENTS.md
+LICENSE
 README.md
 README_REVIEW.md
 pyproject.toml
@@ -28,6 +28,7 @@ docs/baselines_saliency.md
 scripts/recompute_saliency_baselines.py
 scripts/bootstrap_unit_results.py
 scripts/framework_paper_outputs.py
+scripts/framework_paper_appendix_tables.py
 scripts/package_review_artifact.py
 results-model-battery.csv
 results-saliency-baselines.csv

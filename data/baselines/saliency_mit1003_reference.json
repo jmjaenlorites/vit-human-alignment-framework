@@ -49,20 +49,20 @@
   "provenance": {
     "source_repository": {
       "name": "ViT-saliency-alignment",
-      "absolute_path_at_capture": "/Users/jmjaenlorites/PhD/ViT-Alignment/ViT-saliency-alignment",
+      "path_relative_to_repo_root": "../ViT-saliency-alignment",
       "relationship": "sibling_local_repository"
     },
     "capture_method": "Manual provenance capture from legacy aggregate CSV plus source file hashes; binary .npy files were not copied into this repository.",
     "legacy_source_files": [
       {
-        "path": "/Users/jmjaenlorites/PhD/ViT-Alignment/ViT-saliency-alignment/saliency_baselines.csv",
+        "path": "../ViT-saliency-alignment/saliency_baselines.csv",
         "role": "aggregate_baseline_table",
         "sha256": "74606f8430894c01d2e380c30d0bf12381c0aee6174d60f71a503fe990cb3883",
         "bytes": 554,
         "copied_into_this_repo": false
       },
       {
-        "path": "/Users/jmjaenlorites/PhD/ViT-Alignment/ViT-saliency-alignment/metrics/itti_saliency_maps_metrics_density.npy",
+        "path": "../ViT-saliency-alignment/metrics/itti_saliency_maps_metrics_density.npy",
         "role": "legacy_aggregate_and_per_image_density_values",
         "baseline_id": "itti_saliency_maps",
         "reported_per_image_count": 1003,
@@ -71,7 +71,7 @@
         "copied_into_this_repo": false
       },
       {
-        "path": "/Users/jmjaenlorites/PhD/ViT-Alignment/ViT-saliency-alignment/metrics/judd_saliency_py_metrics_density.npy",
+        "path": "../ViT-saliency-alignment/metrics/judd_saliency_py_metrics_density.npy",
         "role": "legacy_aggregate_and_per_image_density_values",
         "baseline_id": "judd_saliency_py",
         "reported_per_image_count": 1003,
@@ -117,7 +117,7 @@
         }
       },
       "per_image_source": {
-        "path": "/Users/jmjaenlorites/PhD/ViT-Alignment/ViT-saliency-alignment/metrics/itti_saliency_maps_metrics_density.npy",
+        "path": "../ViT-saliency-alignment/metrics/itti_saliency_maps_metrics_density.npy",
         "reported_per_image_count": 1003,
         "copied_into_this_repo": false
       }
@@ -162,7 +162,7 @@
         }
       },
       "per_image_source": {
-        "path": "/Users/jmjaenlorites/PhD/ViT-Alignment/ViT-saliency-alignment/metrics/judd_saliency_py_metrics_density.npy",
+        "path": "../ViT-saliency-alignment/metrics/judd_saliency_py_metrics_density.npy",
         "reported_per_image_count": 1003,
         "copied_into_this_repo": false
       }
@@ -170,7 +170,7 @@
   ],
   "legacy_openclip_epoch0_reference": {
     "status": "reference_provisional_legacy_local_results",
-    "source_glob": "/Users/jmjaenlorites/PhD/ViT-Alignment/ViT-saliency-alignment/metrics-3-0-exploring-openclip-checkpoints/*_MIT1003_per_epoch_metrics.csv",
+    "source_glob": "../ViT-saliency-alignment/metrics-3-0-exploring-openclip-checkpoints/*_MIT1003_per_epoch_metrics.csv",
     "values_embedded": false,
     "reason": "These random or untrained OpenCLIP epoch 0 values are legacy local results and must be recalculated through this framework before use in paper tables."
   },
